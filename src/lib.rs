@@ -16,17 +16,7 @@ pub fn log_image_info(path: &str, image: &DynamicImage) {
 ///
 /// # Arguments
 /// * `image` - A dynamic image reference, expected to be in grayscale.
-pub fn get_pixel_matrix(
-    image: &DynamicImage,
-) -> Result<
-    nalgebra::Matrix<
-        u8,
-        nalgebra::Dynamic,
-        nalgebra::Dynamic,
-        nalgebra::VecStorage<u8, nalgebra::Dynamic, nalgebra::Dynamic>,
-    >,
-    InvalidGrayscaleImageError,
-> {
+pub fn get_pixel_matrix(image: &DynamicImage) -> Result<DMatrix<u8>, InvalidGrayscaleImageError> {
     match image {
         DynamicImage::ImageLuma8(gray_image) => {
             // Every pixel in the pixel iterator is a tuple struct of type Luma that contains a single element array.
