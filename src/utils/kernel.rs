@@ -4,7 +4,9 @@
 // Note: cannot define an implementation outside of an external crate for structs in said crate. Therefore, use
 // traits instead to force an external type to be bound by some trait.
 
-use nalgebra::{matrix, DMatrix, Dim, Dynamic, Matrix, Matrix1x3, Matrix3x1, Scalar, Storage};
+use nalgebra::{
+    matrix, DMatrix, Dim, Dynamic, Matrix, Matrix1x3, Matrix3, Matrix3x1, Scalar, Storage,
+};
 use num::{One, Zero};
 use std::ops::{AddAssign, Mul, Sub};
 
@@ -33,6 +35,12 @@ where
         SeparableOperator::Right => (matrix![n_1; n_2; n_1], matrix![n_1_neg, n_0, n_1]),
     }
 }
+
+// Sobel operators for testing and benching
+pub const __TOP_SOBEL: Matrix3<i16> = matrix![1, 2, 1; 0, 0, 0; -1, -2, -1];
+pub const __BOTTOM_SOBEL: Matrix3<i16> = matrix![-1, -2, -1; 0, 0, 0; 1, 2, 1];
+pub const __LEFT_SOBEL: Matrix3<i16> = matrix![1, 0, -1; 2, 0, -2; 1, 0, -1];
+pub const __RIGHT_SOBEL: Matrix3<i16> = matrix![-1, 0, 1; -2, 0, 2; -1, 0, 1];
 
 pub trait Convolve2D<N, R1, C1, S1>
 where
@@ -81,8 +89,6 @@ where
     {
         let matrix_shape = self.shape();
         let kernel_shape = kernel.shape();
-
-        println!("{:?}", kernel_shape);
 
         if kernel_shape == (0, 0)
             || kernel_shape.0 > matrix_shape.0
@@ -133,12 +139,7 @@ mod tests {
     use super::*;
     use crate::get_pixel_matrix;
     use image::{io::Reader as ImageReader, ImageError};
-    use nalgebra::{Matrix3, VecStorage};
-
-    const TOP_SOBEL: Matrix3<i16> = matrix![1, 2, 1; 0, 0, 0; -1, -2, -1];
-    const BOTTOM_SOBEL: Matrix3<i16> = matrix![-1, -2, -1; 0, 0, 0; 1, 2, 1];
-    const LEFT_SOBEL: Matrix3<i16> = matrix![1, 0, -1; 2, 0, -2; 1, 0, -1];
-    const RIGHT_SOBEL: Matrix3<i16> = matrix![-1, 0, 1; -2, 0, 2; -1, 0, 1];
+    use nalgebra::VecStorage;
 
     #[test]
     /// View what a convolved image of the number 4 (grayscale) would look like.
@@ -146,10 +147,10 @@ mod tests {
         let img = ImageReader::open("images\\mnist_png\\train\\4\\2.png")?.decode()?;
         let matrix = get_pixel_matrix(&img).unwrap();
 
-        let top_conv_result = matrix.convolve_2d(&TOP_SOBEL);
-        let bottom_conv_result = matrix.convolve_2d(&BOTTOM_SOBEL);
-        let left_conv_result = matrix.convolve_2d(&LEFT_SOBEL);
-        let right_conv_result = matrix.convolve_2d(&RIGHT_SOBEL);
+        let top_conv_result = matrix.convolve_2d(&__TOP_SOBEL);
+        let bottom_conv_result = matrix.convolve_2d(&__BOTTOM_SOBEL);
+        let left_conv_result = matrix.convolve_2d(&__LEFT_SOBEL);
+        let right_conv_result = matrix.convolve_2d(&__RIGHT_SOBEL);
 
         save("test\\top.png", top_conv_result);
         save("test\\bottom.png", bottom_conv_result);
@@ -188,10 +189,13 @@ mod tests {
             sobel_separated(SeparableOperator::Right),
         ];
 
-        assert_eq!(TOP_SOBEL, separated_sobels[0].0 * separated_sobels[0].1);
-        assert_eq!(BOTTOM_SOBEL, separated_sobels[1].0 * separated_sobels[1].1);
-        assert_eq!(LEFT_SOBEL, separated_sobels[2].0 * separated_sobels[2].1);
-        assert_eq!(RIGHT_SOBEL, separated_sobels[3].0 * separated_sobels[3].1);
+        assert_eq!(__TOP_SOBEL, separated_sobels[0].0 * separated_sobels[0].1);
+        assert_eq!(__LEFT_SOBEL, separated_sobels[2].0 * separated_sobels[2].1);
+        assert_eq!(__RIGHT_SOBEL, separated_sobels[3].0 * separated_sobels[3].1);
+        assert_eq!(
+            __BOTTOM_SOBEL,
+            separated_sobels[1].0 * separated_sobels[1].1
+        );
     }
 
     ////////////////////////
