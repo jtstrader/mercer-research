@@ -10,7 +10,7 @@ use nalgebra::{
 use num::{One, Zero};
 use std::ops::{AddAssign, Mul, Sub};
 
-/// An operator that can be used in convolutions with true Separation (not depthwise)
+/// An operator that can be used in convolutions with true separation (not depthwise)
 pub enum SeparableOperator {
     Top,
     Bottom,
@@ -70,6 +70,7 @@ where
     ///
     /// # Errors
     /// Default Sobel kernel dimensions are 3x3, meaning target matrix's dimensions must be > 3x3.
+    ///
     fn convolve_2d_separated(&self, op: SeparableOperator) -> DMatrix<N>;
 }
 
