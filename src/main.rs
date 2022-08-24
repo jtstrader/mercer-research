@@ -21,8 +21,8 @@ fn test_image_get(image_path: &str) -> Result<(), ImageError> {
         }
     };
 
-    for y in 0..28 {
-        for x in 0..28 {
+    for x in 0..28 {
+        for y in 0..28 {
             print!("{:<3} ", pixel_matrix[(x, y)]);
         }
         println!();
