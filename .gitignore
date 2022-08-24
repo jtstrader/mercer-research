@@ -16,3 +16,7 @@ Cargo.lock
 
 # Ignore test images
 /images
+/test
+
+# Notes for future optimizations, FIXMEs, etc.
+notes.txt
