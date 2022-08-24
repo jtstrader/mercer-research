@@ -5,8 +5,6 @@ fn main() -> Result<(), ImageError> {
     // Test loading an image of the number 4 from the mnist training set
     test_image_get("images\\mnist_png\\train\\4\\2.png")?;
 
-    // Test error handling for InvalidGrayscaleImageError
-    test_image_get("images\\cat.png")?;
     Ok(())
 }
 
@@ -23,9 +21,9 @@ fn test_image_get(image_path: &str) -> Result<(), ImageError> {
         }
     };
 
-    for r in 0..28 {
-        for c in 0..28 {
-            print!("{:<3} ", pixel_matrix[(r * 28) + c]);
+    for y in 0..28 {
+        for x in 0..28 {
+            print!("{:<3} ", pixel_matrix[(x, y)]);
         }
         println!();
     }
