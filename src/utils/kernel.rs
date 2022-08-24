@@ -4,9 +4,20 @@
 // Note: cannot define an implementation outside of an external crate for structs in said crate. Therefore, use
 // traits instead to force an external type to be bound by some trait.
 
-use nalgebra::{matrix, DMatrix, Dim, Dynamic, Matrix, Matrix3, Scalar, Storage};
+use nalgebra::{
+    matrix, DMatrix, Dim, Dynamic, Matrix, Matrix1x3, Matrix3, Matrix3x1, Scalar, Storage,
+};
 use num::Zero;
 use std::ops::{AddAssign, Mul};
+
+pub const TOP_SOBEL_SEPERATED: (Matrix3x1<i16>, Matrix1x3<i16>) =
+    (matrix![1; 0; -1], matrix![1, 2, 1]);
+pub const BOTTOM_SOBEL_SEPERATED: (Matrix3x1<i16>, Matrix1x3<i16>) =
+    (matrix![-1; 0; 1], matrix![1, 2, 1]);
+pub const LEFT_SOBEL_SEPERATED: (Matrix3x1<i16>, Matrix1x3<i16>) =
+    (matrix![1; 2; 1], matrix![1, 0, -1]);
+pub const RIGHT_SOBEL_SEPERATED: (Matrix3x1<i16>, Matrix1x3<i16>) =
+    (matrix![1; 2; 1], matrix![-1, 0, 1]);
 
 pub const TOP_SOBEL: Matrix3<i16> = matrix![1, 2, 1; 0, 0, 0; -1, -2, -1];
 pub const BOTTOM_SOBEL: Matrix3<i16> = matrix![-1, -2, -1; 0, 0, 0; 1, 2, 1];
@@ -86,8 +97,6 @@ where
 #[cfg(test)]
 mod tests {
 
-    use std::collections::HashMap;
-
     use super::*;
     use crate::get_pixel_matrix;
     use image::{io::Reader as ImageReader, ImageError};
@@ -139,24 +148,17 @@ mod tests {
     }
 
     #[test]
-    fn print_sobels() {
-        let sobels = HashMap::from([
-            ("Top", TOP_SOBEL),
-            ("Bottom", BOTTOM_SOBEL),
-            ("Left", LEFT_SOBEL),
-            ("Right", RIGHT_SOBEL),
-        ]);
-
-        for (k, v) in sobels {
-            println!("{}", k);
-
-            for r in 0..3 {
-                for c in 0..3 {
-                    print!("{:>4}", v[(r, c)]);
-                }
-                println!();
-            }
-            println!();
-        }
+    /// Verify that seperated Sobel matrices can be multiplied together to get the desired result.
+    fn verify_seperated_sobels() {
+        assert_eq!(TOP_SOBEL, TOP_SOBEL_SEPERATED.0 * TOP_SOBEL_SEPERATED.1);
+        assert_eq!(LEFT_SOBEL, LEFT_SOBEL_SEPERATED.0 * LEFT_SOBEL_SEPERATED.1);
+        assert_eq!(
+            BOTTOM_SOBEL,
+            BOTTOM_SOBEL_SEPERATED.0 * BOTTOM_SOBEL_SEPERATED.1
+        );
+        assert_eq!(
+            RIGHT_SOBEL,
+            RIGHT_SOBEL_SEPERATED.0 * RIGHT_SOBEL_SEPERATED.1
+        );
     }
 }
