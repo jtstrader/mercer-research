@@ -255,11 +255,7 @@ mod tests {
         let matrix = DMatrix::from_row_iterator(30, 30, 0..(30 * 30));
         let kernel = matrix![0, 0, 0; 0, 1, 0; 0, 0, 0]; // identity
 
-        println!("{}", matrix);
-        println!("{}", matrix.convolve_2d(&kernel, &Padding::None));
-        println!("{}", matrix.convolve_2d(&kernel, &Padding::Same));
-
-        // assert_eq!(matrix, matrix.convolve_2d(&kernel, &Padding::Same));
+        assert_eq!(matrix, matrix.convolve_2d(&kernel, &Padding::Same));
     }
 
     ////////////////////////
