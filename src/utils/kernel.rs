@@ -8,10 +8,7 @@ use nalgebra::{
     matrix, DMatrix, Dim, Dynamic, Matrix, Matrix1x3, Matrix3, Matrix3x1, Scalar, Storage,
 };
 use num::{One, Zero};
-use std::{
-    ops::{AddAssign, Mul, Sub},
-    thread::sleep_ms,
-};
+use std::ops::{AddAssign, Mul, Sub};
 
 /// An operator that can be used in convolutions with true separation (not depthwise)
 pub enum SeparableOperator {
@@ -164,8 +161,8 @@ where
         }
 
         let separated_kernel: (Matrix3x1<N>, Matrix1x3<N>) = sobel_separated(op);
-        self.convolve_2d(&separated_kernel.0, &padding)
-            .convolve_2d(&separated_kernel.1, &padding)
+        self.convolve_2d(&separated_kernel.0, padding)
+            .convolve_2d(&separated_kernel.1, padding)
     }
 }
 
@@ -175,7 +172,7 @@ mod tests {
     use super::*;
     use crate::get_pixel_matrix;
     use image::{io::Reader as ImageReader, ImageError};
-    use nalgebra::{Const, VecStorage};
+    use nalgebra::VecStorage;
 
     #[test]
     /// View what a convolved image of the number 4 (grayscale) would look like.
