@@ -18,6 +18,12 @@ pub enum SeparableOperator {
     Right,
 }
 
+/// Determine padding type to be used during convolution
+pub enum Padding {
+    None,
+    Same,
+}
+
 /// Generate Sobel operator built using generics based on the provided operation variant.
 fn sobel_separated<N>(op: SeparableOperator) -> (Matrix3x1<N>, Matrix1x3<N>)
 where
@@ -57,7 +63,11 @@ where
     /// # Errors
     /// Kernel dimensions must be less than or equal to target matrix's dimensions.
     ///
-    fn convolve_2d<R2, C2, S2>(&self, kernel: &Matrix<N, R2, C2, S2>) -> DMatrix<N>
+    fn convolve_2d<R2, C2, S2>(
+        &self,
+        kernel: &Matrix<N, R2, C2, S2>,
+        padding: &Padding,
+    ) -> DMatrix<N>
     where
         R2: Dim,
         C2: Dim,
@@ -71,7 +81,7 @@ where
     /// # Errors
     /// Default Sobel kernel dimensions are 3x3, meaning target matrix's dimensions must be > 3x3.
     ///
-    fn convolve_2d_separated(&self, op: SeparableOperator) -> DMatrix<N>;
+    fn convolve_2d_separated(&self, op: SeparableOperator, padding: &Padding) -> DMatrix<N>;
 }
 
 impl<N, R1, C1, S1> Convolve2D<N, R1, C1, S1> for Matrix<N, R1, C1, S1>
@@ -82,7 +92,11 @@ where
     S1: Storage<N, R1, C1>,
 {
     // Credit to GitHub user guissalustiano on his nalgebra pull request (#855) on how the Storage trait is used
-    fn convolve_2d<R2, C2, S2>(&self, kernel: &Matrix<N, R2, C2, S2>) -> DMatrix<N>
+    fn convolve_2d<R2, C2, S2>(
+        &self,
+        kernel: &Matrix<N, R2, C2, S2>,
+        padding: &Padding,
+    ) -> DMatrix<N>
     where
         R2: Dim,
         C2: Dim,
@@ -98,21 +112,39 @@ where
             panic!("convolve_2d expects 'self.shape() >= kernel_shape() > 0', received {:?} and {:?} respectively.", matrix_shape, kernel_shape);
         }
 
-        let conv_shape = (
-            matrix_shape.0 - kernel_shape.0 + 1,
-            matrix_shape.1 - kernel_shape.1 + 1,
-        );
+        let conv_shape = match padding {
+            Padding::None => (
+                matrix_shape.0 - kernel_shape.0 + 1,
+                matrix_shape.1 - kernel_shape.1 + 1,
+            ),
+            Padding::Same => (matrix_shape.0, matrix_shape.1),
+        };
 
         let mut conv = DMatrix::zeros_generic(
             Dynamic::from_usize(conv_shape.0),
             Dynamic::from_usize(conv_shape.1),
         );
 
+        // To adjust the matrix with padding, only the top/left padding needs to be concerned.
+        // If the padding is assumed to be odd, additional padding will automatically be set on
+        // the top/left side(s).
+        let (p_top, p_left) = (
+            (conv_shape.0 - (matrix_shape.0 - kernel_shape.0 + 1)) / 2,
+            (conv_shape.1 - (matrix_shape.1 - kernel_shape.1 + 1)) / 2,
+        );
+
         for c_x in 0..conv_shape.0 {
             for c_y in 0..conv_shape.1 {
                 for k_x in 0..kernel_shape.0 {
                     for k_y in 0..kernel_shape.1 {
-                        conv[(c_x, c_y)] += self[(c_x + k_x, c_y + k_y)] * kernel[(k_x, k_y)];
+                        if c_x + k_x >= p_left
+                            && c_y + k_y >= p_top
+                            && c_x + k_x - p_left < matrix_shape.0
+                            && c_y + k_y - p_top < matrix_shape.1
+                        {
+                            conv[(c_x, c_y)] +=
+                                self[(c_x + k_x - p_left, c_y + k_y - p_top)] * kernel[(k_x, k_y)];
+                        }
                     }
                 }
             }
@@ -121,7 +153,7 @@ where
         conv
     }
 
-    fn convolve_2d_separated(&self, op: SeparableOperator) -> DMatrix<N> {
+    fn convolve_2d_separated(&self, op: SeparableOperator, padding: &Padding) -> DMatrix<N> {
         let matrix_shape = self.shape();
 
         if matrix_shape.0 < 3 || matrix_shape.1 < 3 {
@@ -129,8 +161,8 @@ where
         }
 
         let separated_kernel: (Matrix3x1<N>, Matrix1x3<N>) = sobel_separated(op);
-        self.convolve_2d(&separated_kernel.0)
-            .convolve_2d(&separated_kernel.1)
+        self.convolve_2d(&separated_kernel.0, padding)
+            .convolve_2d(&separated_kernel.1, padding)
     }
 }
 
@@ -148,10 +180,10 @@ mod tests {
         let img = ImageReader::open("images\\mnist_png\\train\\4\\2.png")?.decode()?;
         let matrix = get_pixel_matrix(&img).unwrap();
 
-        let top_conv_result = matrix.convolve_2d(&__TOP_SOBEL);
-        let bottom_conv_result = matrix.convolve_2d(&__BOTTOM_SOBEL);
-        let left_conv_result = matrix.convolve_2d(&__LEFT_SOBEL);
-        let right_conv_result = matrix.convolve_2d(&__RIGHT_SOBEL);
+        let top_conv_result = matrix.convolve_2d(&__TOP_SOBEL, &Padding::None);
+        let bottom_conv_result = matrix.convolve_2d(&__BOTTOM_SOBEL, &Padding::None);
+        let left_conv_result = matrix.convolve_2d(&__LEFT_SOBEL, &Padding::None);
+        let right_conv_result = matrix.convolve_2d(&__RIGHT_SOBEL, &Padding::None);
 
         save("test\\top.png", top_conv_result);
         save("test\\bottom.png", bottom_conv_result);
@@ -167,10 +199,13 @@ mod tests {
         let img = ImageReader::open("images\\mnist_png\\train\\4\\2.png")?.decode()?;
         let matrix = get_pixel_matrix(&img).unwrap();
 
-        let top_conv_result = matrix.convolve_2d_separated(SeparableOperator::Top);
-        let bottom_conv_result = matrix.convolve_2d_separated(SeparableOperator::Bottom);
-        let left_conv_result = matrix.convolve_2d_separated(SeparableOperator::Left);
-        let right_conv_result = matrix.convolve_2d_separated(SeparableOperator::Right);
+        let top_conv_result = matrix.convolve_2d_separated(SeparableOperator::Top, &Padding::None);
+        let bottom_conv_result =
+            matrix.convolve_2d_separated(SeparableOperator::Bottom, &Padding::None);
+        let left_conv_result =
+            matrix.convolve_2d_separated(SeparableOperator::Left, &Padding::None);
+        let right_conv_result =
+            matrix.convolve_2d_separated(SeparableOperator::Right, &Padding::None);
 
         save("test\\top.png", top_conv_result);
         save("test\\bottom.png", bottom_conv_result);
@@ -197,6 +232,30 @@ mod tests {
             __BOTTOM_SOBEL,
             separated_sobels[1].0 * separated_sobels[1].1
         );
+    }
+
+    #[test]
+    /// Validate padding calculation
+    fn validate_padding_calc() {
+        let matrix = DMatrix::from_row_iterator(28, 28, 0..(28 * 28));
+
+        let m_size: (usize, usize) = matrix.shape();
+        let k_size: (usize, usize) = __TOP_SOBEL.shape();
+
+        let reg_dims: (usize, usize) = (m_size.0 - k_size.0 + 1, m_size.1 - k_size.1 + 1);
+        let padding: (usize, usize) = (m_size.0 - reg_dims.0, m_size.1 - reg_dims.1);
+
+        assert!(padding.0 < k_size.0);
+        assert!(padding.1 < k_size.1);
+    }
+
+    #[test]
+    /// Convovle with SAME padding
+    fn convolve_2d_padding_same() {
+        let matrix = DMatrix::from_row_iterator(30, 30, 0..(30 * 30));
+        let kernel = matrix![0, 0, 0; 0, 1, 0; 0, 0, 0]; // identity
+
+        assert_eq!(matrix, matrix.convolve_2d(&kernel, &Padding::Same));
     }
 
     ////////////////////////
