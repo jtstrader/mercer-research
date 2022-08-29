@@ -3,7 +3,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use image::io::Reader as ImageReader;
 use mercer_research::get_pixel_matrix;
-use mercer_research::utils::kernel::{Convolve2D, SeparableOperator, __TOP_SOBEL};
+use mercer_research::utils::kernel::{Convolve2D, Padding, SeparableOperator, __TOP_SOBEL};
 use nalgebra::DMatrix;
 
 fn get_image_data() -> DMatrix<i16> {
@@ -19,14 +19,14 @@ fn get_image_data() -> DMatrix<i16> {
 pub fn simple_convolution(c: &mut Criterion) {
     c.bench_function("Simple Convolution", |b| {
         let img_data: DMatrix<i16> = get_image_data();
-        b.iter(|| img_data.convolve_2d(&__TOP_SOBEL));
+        b.iter(|| img_data.convolve_2d(&__TOP_SOBEL, &Padding::None));
     });
 }
 
 pub fn separated_convolution(c: &mut Criterion) {
     c.bench_function("Separated Convolution", |b| {
         let img_data: DMatrix<i16> = get_image_data();
-        b.iter(|| img_data.convolve_2d_separated(SeparableOperator::Top));
+        b.iter(|| img_data.convolve_2d_separated(SeparableOperator::Top, &Padding::None));
     });
 }
 
