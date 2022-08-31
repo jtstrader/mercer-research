@@ -86,7 +86,14 @@ where
 
 impl<N, R1, C1, S1> Convolve2D<N, R1, C1, S1> for Matrix<N, R1, C1, S1>
 where
-    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy,
+    N: Scalar
+        + Zero
+        + One
+        + AddAssign
+        + Sub<Output = N>
+        + Mul<Output = N>
+        + Copy
+        + std::fmt::Display,
     R1: Dim,
     C1: Dim,
     S1: Storage<N, R1, C1>,
@@ -125,26 +132,24 @@ where
             Dynamic::from_usize(conv_shape.1),
         );
 
-        // To adjust the matrix with padding, only the top/left padding needs to be concerned.
-        // If the padding is assumed to be odd, additional padding will automatically be set on
-        // the top/left side(s).
-        let (p_top, p_left) = (
-            (conv_shape.0 - (matrix_shape.0 - kernel_shape.0 + 1)) / 2,
-            (conv_shape.1 - (matrix_shape.1 - kernel_shape.1 + 1)) / 2,
+        let mut matrix: DMatrix<N> = DMatrix::zeros_generic(
+            Dynamic::from_usize(matrix_shape.0 + 2),
+            Dynamic::from_usize(matrix_shape.1 + 2),
         );
 
-        for c_x in 0..conv_shape.0 {
-            for c_y in 0..conv_shape.1 {
-                for k_x in 0..kernel_shape.0 {
-                    for k_y in 0..kernel_shape.1 {
-                        if c_x + k_x >= p_left
-                            && c_y + k_y >= p_top
-                            && c_x + k_x - p_left < matrix_shape.0
-                            && c_y + k_y - p_top < matrix_shape.1
-                        {
-                            conv[(c_x, c_y)] +=
-                                self[(c_x + k_x - p_left, c_y + k_y - p_top)] * kernel[(k_x, k_y)];
-                        }
+        // recreate self with new borders
+        // for now, assume offset is one
+        for cy in 1..(matrix_shape.0 + 1) {
+            for cx in 1..(matrix_shape.1 + 1) {
+                matrix[(cy, cx)] = self[(cy - 1, cx - 1)];
+            }
+        }
+
+        for cy in 0..conv_shape.0 {
+            for cx in 0..conv_shape.1 {
+                for ky in 0..kernel_shape.0 {
+                    for kx in 0..kernel_shape.1 {
+                        conv[(cy, cx)] += matrix[(cy + ky, cx + kx)] * kernel[(ky, kx)];
                     }
                 }
             }
@@ -180,10 +185,10 @@ mod tests {
         let img = ImageReader::open("images\\mnist_png\\train\\4\\2.png")?.decode()?;
         let matrix = get_pixel_matrix(&img).unwrap();
 
-        let top_conv_result = matrix.convolve_2d(&__TOP_SOBEL, &Padding::None);
-        let bottom_conv_result = matrix.convolve_2d(&__BOTTOM_SOBEL, &Padding::None);
-        let left_conv_result = matrix.convolve_2d(&__LEFT_SOBEL, &Padding::None);
-        let right_conv_result = matrix.convolve_2d(&__RIGHT_SOBEL, &Padding::None);
+        let top_conv_result = matrix.convolve_2d(&__TOP_SOBEL, &Padding::Same);
+        let bottom_conv_result = matrix.convolve_2d(&__BOTTOM_SOBEL, &Padding::Same);
+        let left_conv_result = matrix.convolve_2d(&__LEFT_SOBEL, &Padding::Same);
+        let right_conv_result = matrix.convolve_2d(&__RIGHT_SOBEL, &Padding::Same);
 
         save("test\\top.png", top_conv_result);
         save("test\\bottom.png", bottom_conv_result);
@@ -199,13 +204,13 @@ mod tests {
         let img = ImageReader::open("images\\mnist_png\\train\\4\\2.png")?.decode()?;
         let matrix = get_pixel_matrix(&img).unwrap();
 
-        let top_conv_result = matrix.convolve_2d_separated(SeparableOperator::Top, &Padding::None);
+        let top_conv_result = matrix.convolve_2d_separated(SeparableOperator::Top, &Padding::Same);
         let bottom_conv_result =
-            matrix.convolve_2d_separated(SeparableOperator::Bottom, &Padding::None);
+            matrix.convolve_2d_separated(SeparableOperator::Bottom, &Padding::Same);
         let left_conv_result =
-            matrix.convolve_2d_separated(SeparableOperator::Left, &Padding::None);
+            matrix.convolve_2d_separated(SeparableOperator::Left, &Padding::Same);
         let right_conv_result =
-            matrix.convolve_2d_separated(SeparableOperator::Right, &Padding::None);
+            matrix.convolve_2d_separated(SeparableOperator::Right, &Padding::Same);
 
         save("test\\top.png", top_conv_result);
         save("test\\bottom.png", bottom_conv_result);
@@ -258,6 +263,28 @@ mod tests {
         assert_eq!(matrix, matrix.convolve_2d(&kernel, &Padding::Same));
     }
 
+    #[test]
+    /// Test with a huge file
+    fn large_convolve_2d() -> Result<(), ImageError> {
+        let img = ImageReader::open("images\\dog.jpeg")?.decode()?.grayscale();
+        let matrix = get_pixel_matrix(&img).unwrap();
+
+        let top_conv_result = matrix.convolve_2d_separated(SeparableOperator::Top, &Padding::Same);
+        let bottom_conv_result =
+            matrix.convolve_2d_separated(SeparableOperator::Bottom, &Padding::Same);
+        let left_conv_result =
+            matrix.convolve_2d_separated(SeparableOperator::Left, &Padding::Same);
+        let right_conv_result =
+            matrix.convolve_2d_separated(SeparableOperator::Right, &Padding::Same);
+
+        save("test\\dog_top.png", top_conv_result);
+        save("test\\dog_bottom.png", bottom_conv_result);
+        save("test\\dog_left.png", left_conv_result);
+        save("test\\dog_right.png", right_conv_result);
+
+        Ok(())
+    }
+
     ////////////////////////
     // Utility functions //
     ///////////////////////
@@ -279,12 +306,15 @@ mod tests {
         // nalgebra matrix iterators are column-major, not row-major, but the ImageBuffer is expecting a row-major
         // collection. Transposing the matrix as of now is not the best for performance, but makes it easier to read
         // when saving the file for debugging.
-        let buf: Vec<u8> = matrix.transpose().iter().map(|i| normalize(*i)).collect();
         image::save_buffer(
             name,
-            &buf,
-            matrix.shape().0 as u32,
+            &matrix
+                .transpose()
+                .iter()
+                .map(|i| normalize(*i))
+                .collect::<Vec<u8>>(),
             matrix.shape().1 as u32,
+            matrix.shape().0 as u32,
             image::ColorType::L8,
         )
         .unwrap();
