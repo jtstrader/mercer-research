@@ -109,22 +109,29 @@ where
         C2: Dim,
         S2: Storage<N, R2, C2>,
     {
-        let matrix_shape = self.shape();
+        let target_shape = self.shape();
         let kernel_shape = kernel.shape();
 
         if kernel_shape == (0, 0)
-            || kernel_shape.0 > matrix_shape.0
-            || kernel_shape.1 > matrix_shape.1
+            || kernel_shape.0 > target_shape.0
+            || kernel_shape.1 > target_shape.1
         {
-            panic!("convolve_2d expects 'self.shape() >= kernel_shape() > 0', received {:?} and {:?} respectively.", matrix_shape, kernel_shape);
+            panic!("convolve_2d expects 'self.shape() >= kernel_shape() > 0', received {:?} and {:?} respectively.", target_shape, kernel_shape);
+        }
+
+        // Only allow same padding if both kernel dimensions are odd
+        if kernel_shape.0 % 2 == 0 || kernel_shape.1 % 2 == 0 {
+            if let Padding::Same = padding {
+                panic!("convolve_2d expects kernel dimensions to be odd when padding mode set to 'SAME', got {:?}", kernel_shape);
+            }
         }
 
         let conv_shape = match padding {
             Padding::None => (
-                matrix_shape.0 - kernel_shape.0 + 1,
-                matrix_shape.1 - kernel_shape.1 + 1,
+                target_shape.0 - kernel_shape.0 + 1,
+                target_shape.1 - kernel_shape.1 + 1,
             ),
-            Padding::Same => (matrix_shape.0, matrix_shape.1),
+            Padding::Same => (target_shape.0, target_shape.1),
         };
 
         let mut conv = DMatrix::zeros_generic(
@@ -132,15 +139,16 @@ where
             Dynamic::from_usize(conv_shape.1),
         );
 
+        // Padding is (f - 1) / 2, where f is the respective dimension of the kernel
         let mut matrix: DMatrix<N> = DMatrix::zeros_generic(
-            Dynamic::from_usize(matrix_shape.0 + 2),
-            Dynamic::from_usize(matrix_shape.1 + 2),
+            Dynamic::from_usize(target_shape.0 + (kernel_shape.0 / 2) * 2),
+            Dynamic::from_usize(target_shape.1 + (kernel_shape.1 / 2) * 2),
         );
 
         // recreate self with new borders
         // for now, assume offset is one
-        for cy in 1..(matrix_shape.0 + 1) {
-            for cx in 1..(matrix_shape.1 + 1) {
+        for cy in 1..(target_shape.0 + 1) {
+            for cx in 1..(target_shape.1 + 1) {
                 matrix[(cy, cx)] = self[(cy - 1, cx - 1)];
             }
         }
