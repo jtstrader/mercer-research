@@ -30,5 +30,25 @@ pub fn separated_convolution(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, simple_convolution, separated_convolution);
+pub fn padded_simple(c: &mut Criterion) {
+    c.bench_function("Simple Convolution (Padded: Same)", |b| {
+        let img_data: DMatrix<i16> = get_image_data();
+        b.iter(|| img_data.convolve_2d(&__TOP_SOBEL, &Padding::Same));
+    });
+}
+
+pub fn padded_separated(c: &mut Criterion) {
+    c.bench_function("Separated Convolution (Padded: Same)", |b| {
+        let img_data: DMatrix<i16> = get_image_data();
+        b.iter(|| img_data.convolve_2d_separated(SeparableOperator::Top, &Padding::Same));
+    });
+}
+
+criterion_group!(
+    benches,
+    simple_convolution,
+    separated_convolution,
+    padded_simple,
+    padded_separated
+);
 criterion_main!(benches);
