@@ -24,6 +24,12 @@ pub enum Padding {
     Same,
 }
 
+/// Determine the pooling type to be used in the pooling layer
+pub enum Pooling {
+    Average,
+    Max,
+}
+
 /// Generate Sobel operator built using generics based on the provided operation variant.
 fn sobel_separated<N>(op: SeparableOperator) -> (Matrix3x1<N>, Matrix1x3<N>)
 where
@@ -50,7 +56,7 @@ pub const __RIGHT_SOBEL: Matrix3<i16> = matrix![-1, 0, 1; -2, 0, 2; -1, 0, 1];
 
 pub trait Convolve2D<N, R1, C1, S1>
 where
-    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy,
+    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + PartialOrd,
     R1: Dim,
     C1: Dim,
     S1: Storage<N, R1, C1>,
@@ -58,7 +64,8 @@ where
     /// Returns the convolution of a target 2D Matrix and a kernel.
     ///
     /// # Arguments
-    /// * `kernel` - A Matrix with size > 0
+    /// * `kernel` - A Matrix with size > 0.
+    /// * `padding` - The padding style to be used. Can be either `Padding::None` or `Padding::Same`.
     ///
     /// # Errors
     /// Kernel dimensions must be less than or equal to target matrix's dimensions.
@@ -77,23 +84,28 @@ where
     ///
     /// # Arguments
     /// * `op` - An valid operation from the `SeparableOperator` enum.
+    /// * `padding` - The padding style to be used. Can be either `Padding::None` or `Padding::Same`.
     ///
     /// # Errors
     /// Default Sobel kernel dimensions are 3x3, meaning target matrix's dimensions must be > 3x3.
     ///
     fn convolve_2d_separated(&self, op: SeparableOperator, padding: &Padding) -> DMatrix<N>;
+
+    /// Returns a condensed matrix resulting from either max or average pooling.
+    ///
+    /// # Arguments
+    /// * `padding` - The padding style to be used. Can be either `Padding::None` or `Padding::Same`.
+    /// * `pooling` - The pooling style to be used. Can be either `Pooling::Average` or `Pooling::Max`.
+    ///
+    /// # Errors
+    /// Target matrix must have dimensions greater than 2x2.
+    ///
+    fn pool_2d(&self, padding: &Padding, pooling: &Pooling) -> DMatrix<N>;
 }
 
 impl<N, R1, C1, S1> Convolve2D<N, R1, C1, S1> for Matrix<N, R1, C1, S1>
 where
-    N: Scalar
-        + Zero
-        + One
-        + AddAssign
-        + Sub<Output = N>
-        + Mul<Output = N>
-        + Copy
-        + std::fmt::Display,
+    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + Ord,
     R1: Dim,
     C1: Dim,
     S1: Storage<N, R1, C1>,
@@ -169,6 +181,83 @@ where
         self.convolve_2d(&separated_kernel.0, padding)
             .convolve_2d(&separated_kernel.1, padding)
     }
+
+    fn pool_2d(&self, padding: &Padding, pooling: &Pooling) -> DMatrix<N> {
+        if self.shape().0 < 2 || self.shape().1 < 2 {
+            panic!(
+                "stride_2d expected a matrix with dimensions greater than (2, 2), got {:?}",
+                self.shape()
+            );
+        }
+
+        if let Padding::Same = padding {
+            // Pad original matrix with new size if required
+            let row_padding = self.shape().0 % 2;
+            let col_padding = self.shape().1 % 2;
+
+            if row_padding != 0 || col_padding != 0 {
+                return __pooling_padded(self, (row_padding, col_padding), pooling);
+            }
+        }
+
+        DMatrix::zeros(1, 2)
+    }
+}
+
+/// *Internal Function*
+///
+/// Perform pooling operation on the target matrix with same padding. Padding values are given in
+/// (row_padding, column_padding) format.
+fn __pooling_padded<N, R, C, S>(
+    m: &Matrix<N, R, C, S>,
+    padding: (usize, usize),
+    pooling: &Pooling,
+) -> DMatrix<N>
+where
+    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + Ord,
+    R: Dim,
+    C: Dim,
+    S: Storage<N, R, C>,
+{
+    let original_size = m.shape();
+    let mut padded_matrix = DMatrix::zeros_generic(
+        Dynamic::from_usize(original_size.0 + padding.0),
+        Dynamic::from_usize(original_size.1 + padding.1),
+    );
+
+    for row in 0..original_size.0 {
+        for col in 0..original_size.1 {
+            padded_matrix[(col, row)] = m[(col, row)];
+        }
+    }
+
+    let mut res: DMatrix<N> = DMatrix::zeros_generic(
+        Dynamic::from_usize(padded_matrix.shape().0 / 2),
+        Dynamic::from_usize(padded_matrix.shape().1 / 2),
+    );
+
+    let mut pooler: [N; 4] = [num::zero(); 4];
+
+    for row in 0..res.shape().0 {
+        for col in 0..res.shape().1 {
+            res[(col, row)] = match pooling {
+                Pooling::Max => {
+                    for pooler_row in 0..2 {
+                        for pooler_col in 0..2 {
+                            pooler[pooler_col + (pooler_row * 2)] =
+                                padded_matrix[(row * 2 + pooler_row, col * 2 + pooler_col)];
+                        }
+                    }
+                    *pooler.iter().max().unwrap()
+                }
+                _ => {
+                    panic!("Not implemented");
+                }
+            };
+        }
+    }
+
+    res
 }
 
 #[cfg(test)]
