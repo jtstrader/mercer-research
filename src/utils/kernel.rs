@@ -227,7 +227,31 @@ where
             }
         }
 
-        DMatrix::zeros(1, 2)
+        let mut res: DMatrix<N> = DMatrix::zeros_generic(
+            Dynamic::from_usize(self.shape().0 / 2),
+            Dynamic::from_usize(self.shape().1 / 2),
+        );
+
+        let mut pooler: [N; 4] = [num::zero(); 4];
+        for ry in 0..res.shape().0 {
+            for rx in 0..res.shape().1 {
+                res[(ry, rx)] = match pooling {
+                    Pooling::Max => {
+                        for px in 0..2 {
+                            for py in 0..2 {
+                                pooler[py + (px * 2)] = self[(ry * 2 + px, rx * 2 + py)];
+                            }
+                        }
+                        *pooler.iter().max().unwrap()
+                    }
+                    _ => {
+                        panic!("Not implemented");
+                    }
+                };
+            }
+        }
+
+        res
     }
 }
 
@@ -252,9 +276,9 @@ where
         Dynamic::from_usize(original_size.1 + padding.1),
     );
 
-    for row in 0..original_size.0 {
-        for col in 0..original_size.1 {
-            padded_matrix[(col, row)] = m[(col, row)];
+    for pmy in 0..original_size.0 {
+        for pmx in 0..original_size.1 {
+            padded_matrix[(pmy, pmx)] = m[(pmy, pmx)];
         }
     }
 
@@ -264,15 +288,13 @@ where
     );
 
     let mut pooler: [N; 4] = [num::zero(); 4];
-
-    for row in 0..res.shape().0 {
-        for col in 0..res.shape().1 {
-            res[(col, row)] = match pooling {
+    for ry in 0..res.shape().0 {
+        for rx in 0..res.shape().1 {
+            res[(ry, rx)] = match pooling {
                 Pooling::Max => {
-                    for pooler_row in 0..2 {
-                        for pooler_col in 0..2 {
-                            pooler[pooler_col + (pooler_row * 2)] =
-                                padded_matrix[(row * 2 + pooler_row, col * 2 + pooler_col)];
+                    for px in 0..2 {
+                        for py in 0..2 {
+                            pooler[py + (px * 2)] = padded_matrix[(ry * 2 + px, rx * 2 + py)];
                         }
                     }
                     *pooler.iter().max().unwrap()
@@ -397,6 +419,37 @@ mod tests {
         save("test\\dog_bottom.png", bottom_conv_result);
         save("test\\dog_left.png", left_conv_result);
         save("test\\dog_right.png", right_conv_result);
+
+        Ok(())
+    }
+
+    #[test]
+    /// Test pooling layer
+    fn pool_2d() -> Result<(), ImageError> {
+        let img = ImageReader::open("images\\dog.jpeg")?.decode()?.grayscale();
+        let matrix = get_pixel_matrix(&img).unwrap();
+
+        let top_conv_result = matrix
+            .convolve_2d_separated(SeparableOperator::Top, &Padding::Same)
+            .pool_2d(&Padding::Same, &Pooling::Max);
+
+        save("test\\dog_pooled_max.jpeg", top_conv_result);
+
+        Ok(())
+    }
+
+    #[test]
+    /// Test pooling layer
+    fn pool_2d_double() -> Result<(), ImageError> {
+        let img = ImageReader::open("images\\dog.jpeg")?.decode()?.grayscale();
+        let matrix = get_pixel_matrix(&img).unwrap();
+
+        let top_conv_result = matrix
+            .convolve_2d_separated(SeparableOperator::Top, &Padding::Same)
+            .pool_2d(&Padding::Same, &Pooling::Max)
+            .pool_2d(&Padding::Same, &Pooling::Max);
+
+        save("test\\dog_double_pooled_max.jpeg", top_conv_result);
 
         Ok(())
     }
