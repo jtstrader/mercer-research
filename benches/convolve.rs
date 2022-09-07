@@ -3,7 +3,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use image::io::Reader as ImageReader;
 use mercer_research::get_pixel_matrix;
-use mercer_research::utils::kernel::{Convolve2D, Padding, SeparableOperator, __TOP_SOBEL};
+use mercer_research::utils::kernel::{
+    Convolve2D, Padding, Pooling, SeparableOperator, __TOP_SOBEL,
+};
 use nalgebra::DMatrix;
 
 fn get_image_data() -> DMatrix<i16> {
@@ -44,11 +46,19 @@ pub fn padded_separated(c: &mut Criterion) {
     });
 }
 
+pub fn max_pooling(c: &mut Criterion) {
+    c.bench_function("Max Pooling", |b| {
+        let img_data: DMatrix<i16> = get_image_data();
+        b.iter(|| img_data.pool_2d(&Padding::Same, &Pooling::Max));
+    });
+}
+
 criterion_group!(
     benches,
     simple_convolution,
     separated_convolution,
     padded_simple,
-    padded_separated
+    padded_separated,
+    max_pooling
 );
 criterion_main!(benches);
