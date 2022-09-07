@@ -121,53 +121,80 @@ where
         C2: Dim,
         S2: Storage<N, R2, C2>,
     {
-        let matrix_shape = self.shape();
+        let target_shape = self.shape();
         let kernel_shape = kernel.shape();
 
         if kernel_shape == (0, 0)
-            || kernel_shape.0 > matrix_shape.0
-            || kernel_shape.1 > matrix_shape.1
+            || kernel_shape.0 > target_shape.0
+            || kernel_shape.1 > target_shape.1
         {
-            panic!("convolve_2d expects 'self.shape() >= kernel_shape() > 0', received {:?} and {:?} respectively.", matrix_shape, kernel_shape);
+            panic!("convolve_2d expects 'self.shape() >= kernel_shape() > 0', received {:?} and {:?} respectively.", target_shape, kernel_shape);
         }
 
-        let conv_shape = match padding {
-            Padding::None => (
-                matrix_shape.0 - kernel_shape.0 + 1,
-                matrix_shape.1 - kernel_shape.1 + 1,
-            ),
-            Padding::Same => (matrix_shape.0, matrix_shape.1),
-        };
-
-        let mut conv = DMatrix::zeros_generic(
-            Dynamic::from_usize(conv_shape.0),
-            Dynamic::from_usize(conv_shape.1),
-        );
-
-        let mut matrix: DMatrix<N> = DMatrix::zeros_generic(
-            Dynamic::from_usize(matrix_shape.0 + 2),
-            Dynamic::from_usize(matrix_shape.1 + 2),
-        );
-
-        // recreate self with new borders
-        // for now, assume offset is one
-        for cy in 1..(matrix_shape.0 + 1) {
-            for cx in 1..(matrix_shape.1 + 1) {
-                matrix[(cy, cx)] = self[(cy - 1, cx - 1)];
+        // Only allow same padding if both kernel dimensions are odd
+        if kernel_shape.0 % 2 == 0 || kernel_shape.1 % 2 == 0 {
+            if let Padding::Same = padding {
+                panic!("convolve_2d expects kernel dimensions to be odd when padding mode set to 'SAME', got {:?}", kernel_shape);
             }
         }
 
-        for cy in 0..conv_shape.0 {
-            for cx in 0..conv_shape.1 {
-                for ky in 0..kernel_shape.0 {
-                    for kx in 0..kernel_shape.1 {
-                        conv[(cy, cx)] += matrix[(cy + ky, cx + kx)] * kernel[(ky, kx)];
+        match padding {
+            Padding::Same => {
+                let conv_shape = (target_shape.0, target_shape.1);
+                let padding = (kernel_shape.0 / 2, kernel_shape.1 / 2);
+
+                let mut conv = DMatrix::zeros_generic(
+                    Dynamic::from_usize(conv_shape.0),
+                    Dynamic::from_usize(conv_shape.1),
+                );
+
+                // Padding is (f - 1) / 2, where f is the respective dimension of the kernel
+                let mut matrix: DMatrix<N> = DMatrix::zeros_generic(
+                    Dynamic::from_usize(target_shape.0 + padding.0 * 2),
+                    Dynamic::from_usize(target_shape.1 + padding.1 * 2),
+                );
+
+                // Recreate self into new matrix with padded borders
+                for cy in 1..(target_shape.0 + padding.0) {
+                    for cx in 1..(target_shape.1 + padding.1) {
+                        matrix[(cy, cx)] = self[(cy - 1, cx - 1)];
                     }
                 }
+
+                for cy in 0..conv_shape.0 {
+                    for cx in 0..conv_shape.1 {
+                        for ky in 0..kernel_shape.0 {
+                            for kx in 0..kernel_shape.1 {
+                                conv[(cy, cx)] += matrix[(cy + ky, cx + kx)] * kernel[(ky, kx)];
+                            }
+                        }
+                    }
+                }
+                conv
+            }
+            Padding::None => {
+                let conv_shape = (
+                    target_shape.0 - kernel_shape.0 + 1,
+                    target_shape.1 - kernel_shape.1 + 1,
+                );
+
+                let mut conv = DMatrix::zeros_generic(
+                    Dynamic::from_usize(conv_shape.0),
+                    Dynamic::from_usize(conv_shape.1),
+                );
+
+                for cy in 0..conv_shape.0 {
+                    for cx in 0..conv_shape.1 {
+                        for ky in 0..kernel_shape.0 {
+                            for kx in 0..kernel_shape.1 {
+                                conv[(cy, cx)] += self[(cy + ky, cx + kx)] * kernel[(ky, kx)];
+                            }
+                        }
+                    }
+                }
+                conv
             }
         }
-
-        conv
     }
 
     fn convolve_2d_separated(&self, op: SeparableOperator, padding: &Padding) -> DMatrix<N> {
