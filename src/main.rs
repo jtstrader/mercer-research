@@ -1,5 +1,5 @@
 use image::{io::Reader as ImageReader, ImageError};
-use mercer_research::{get_pixel_matrix, log_image_info};
+use mercer_research::{__log_image_info, get_pixel_matrix};
 
 fn main() -> Result<(), ImageError> {
     // Test loading an image of the number 4 from the mnist training set
@@ -11,7 +11,7 @@ fn main() -> Result<(), ImageError> {
 fn test_image_get(image_path: &str) -> Result<(), ImageError> {
     let base_img = ImageReader::open(image_path)?.decode()?;
 
-    log_image_info(image_path, &base_img);
+    __log_image_info(image_path, &base_img);
     println!();
 
     let pixel_matrix = match get_pixel_matrix(&base_img) {
