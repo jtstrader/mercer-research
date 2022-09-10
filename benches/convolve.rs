@@ -4,7 +4,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use image::io::Reader as ImageReader;
 use mercer_research::get_pixel_matrix;
 use mercer_research::utils::kernel::{
-    Convolve2D, Padding, Pooling, SeparableOperator, __TOP_SOBEL,
+    Convolve2D, Padding, Pool2D, Pooling, SeparableOperator, __TOP_SOBEL,
 };
 use nalgebra::DMatrix;
 
