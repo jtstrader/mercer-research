@@ -90,17 +90,6 @@ where
     /// Default Sobel kernel dimensions are 3x3, meaning target matrix's dimensions must be > 3x3.
     ///
     fn convolve_2d_separated(&self, op: SeparableOperator, padding: &Padding) -> DMatrix<N>;
-
-    /// Returns a condensed matrix resulting from either max or average pooling.
-    ///
-    /// # Arguments
-    /// * `padding` - The padding style to be used. Can be either `Padding::None` or `Padding::Same`.
-    /// * `pooling` - The pooling style to be used. Can be either `Pooling::Average` or `Pooling::Max`.
-    ///
-    /// # Errors
-    /// Target matrix must have dimensions greater than 2x2.
-    ///
-    fn pool_2d(&self, padding: &Padding, pooling: &Pooling) -> DMatrix<N>;
 }
 
 impl<N, R1, C1, S1> Convolve2D<N, R1, C1, S1> for Matrix<N, R1, C1, S1>
@@ -208,7 +197,34 @@ where
         self.convolve_2d(&separated_kernel.0, padding)
             .convolve_2d(&separated_kernel.1, padding)
     }
+}
 
+pub trait Pool2D<N, R, C, S>
+where
+    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + Ord,
+    R: Dim,
+    C: Dim,
+    S: Storage<N, R, C>,
+{
+    /// Returns a condensed matrix resulting from either max or average pooling.
+    ///
+    /// # Arguments
+    /// * `padding` - The padding style to be used. Can be either `Padding::None` or `Padding::Same`.
+    /// * `pooling` - The pooling style to be used. Can be either `Pooling::Average` or `Pooling::Max`.
+    ///
+    /// # Errors
+    /// Target matrix must have dimensions greater than 2x2.
+    ///
+    fn pool_2d(&self, padding: &Padding, pooling: &Pooling) -> DMatrix<N>;
+}
+
+impl<N, R, C, S> Pool2D<N, R, C, S> for Matrix<N, R, C, S>
+where
+    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + Ord,
+    R: Dim,
+    C: Dim,
+    S: Storage<N, R, C>,
+{
     fn pool_2d(&self, padding: &Padding, pooling: &Pooling) -> DMatrix<N> {
         if self.shape().0 < 2 || self.shape().1 < 2 {
             panic!(
