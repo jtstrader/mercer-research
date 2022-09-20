@@ -49,10 +49,10 @@ where
 }
 
 // Sobel operators for testing and benching
-pub const __TOP_SOBEL: Matrix3<i16> = matrix![1, 2, 1; 0, 0, 0; -1, -2, -1];
-pub const __BOTTOM_SOBEL: Matrix3<i16> = matrix![-1, -2, -1; 0, 0, 0; 1, 2, 1];
-pub const __LEFT_SOBEL: Matrix3<i16> = matrix![1, 0, -1; 2, 0, -2; 1, 0, -1];
-pub const __RIGHT_SOBEL: Matrix3<i16> = matrix![-1, 0, 1; -2, 0, 2; -1, 0, 1];
+pub const __TOP_SOBEL: Matrix3<f64> = matrix![1.0, 2.0, 1.0; 0.0, 0.0, 0.0; -1.0, -2.0, -1.0];
+pub const __BOTTOM_SOBEL: Matrix3<f64> = matrix![-1.0, -2.0, -1.0; 0.0, 0.0, 0.0; 1.0, 2.0, 1.0];
+pub const __LEFT_SOBEL: Matrix3<f64> = matrix![1.0, 0.0, -1.0; 2.0, 0.0, -2.0; 1.0, 0.0, -1.0];
+pub const __RIGHT_SOBEL: Matrix3<f64> = matrix![-1.0, 0.0, 1.0; -2.0, 0.0, 2.0; -1.0, 0.0, 1.0];
 
 pub trait Convolve2D<N, R1, C1, S1>
 where
@@ -94,7 +94,7 @@ where
 
 impl<N, R1, C1, S1> Convolve2D<N, R1, C1, S1> for Matrix<N, R1, C1, S1>
 where
-    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + Ord,
+    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + PartialOrd,
     R1: Dim,
     C1: Dim,
     S1: Storage<N, R1, C1>,
@@ -201,7 +201,7 @@ where
 
 pub trait Pool2D<N, R, C, S>
 where
-    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + Ord,
+    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + PartialOrd,
     R: Dim,
     C: Dim,
     S: Storage<N, R, C>,
@@ -220,7 +220,7 @@ where
 
 impl<N, R, C, S> Pool2D<N, R, C, S> for Matrix<N, R, C, S>
 where
-    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + Ord,
+    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + PartialOrd,
     R: Dim,
     C: Dim,
     S: Storage<N, R, C>,
@@ -258,7 +258,10 @@ where
                                 pooler[py + (px * 2)] = self[(ry * 2 + px, rx * 2 + py)];
                             }
                         }
-                        *pooler.iter().max().unwrap()
+                        *pooler
+                            .iter()
+                            .max_by(|a, b| a.partial_cmp(b).unwrap())
+                            .unwrap()
                     }
                     _ => {
                         panic!("Not implemented");
@@ -281,7 +284,7 @@ fn __pooling_padded<N, R, C, S>(
     pooling: &Pooling,
 ) -> DMatrix<N>
 where
-    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + Ord,
+    N: Scalar + Zero + One + AddAssign + Sub<Output = N> + Mul<Output = N> + Copy + PartialOrd,
     R: Dim,
     C: Dim,
     S: Storage<N, R, C>,
@@ -313,7 +316,10 @@ where
                             pooler[py + (px * 2)] = padded_matrix[(ry * 2 + px, rx * 2 + py)];
                         }
                     }
-                    *pooler.iter().max().unwrap()
+                    *pooler
+                        .iter()
+                        .max_by(|a, b| a.partial_cmp(b).unwrap())
+                        .unwrap()
                 }
                 _ => {
                     panic!("Not implemented");
@@ -377,7 +383,7 @@ mod tests {
     #[test]
     /// Verify that Separated Sobel matrices can be multiplied together to get the desired result.
     fn verify_separated_sobels() {
-        let separated_sobels: [(Matrix3x1<i16>, Matrix1x3<i16>); 4] = [
+        let separated_sobels: [(Matrix3x1<f64>, Matrix1x3<f64>); 4] = [
             sobel_separated(SeparableOperator::Top),
             sobel_separated(SeparableOperator::Bottom),
             sobel_separated(SeparableOperator::Left),
@@ -476,10 +482,10 @@ mod tests {
 
     /// For debugging purposes, convert a grayscale pixel value to 255 (white) if greater than 255. If less than 0,
     /// set the pixel value to 0 (black). Otherwise, leave the pixel value as is.
-    fn normalize(i: i16) -> u8 {
-        if i > 255 {
+    fn normalize(i: f64) -> u8 {
+        if i > 255_f64 {
             255 as u8
-        } else if i < 0 {
+        } else if i < 0_f64 {
             0 as u8
         } else {
             i as u8
@@ -487,7 +493,7 @@ mod tests {
     }
 
     /// Save an image buffer (matrix form) into a file
-    fn save(name: &str, matrix: Matrix<i16, Dynamic, Dynamic, VecStorage<i16, Dynamic, Dynamic>>) {
+    fn save(name: &str, matrix: Matrix<f64, Dynamic, Dynamic, VecStorage<f64, Dynamic, Dynamic>>) {
         // nalgebra matrix iterators are column-major, not row-major, but the ImageBuffer is expecting a row-major
         // collection. Transposing the matrix as of now is not the best for performance, but makes it easier to read
         // when saving the file for debugging.
