@@ -7,6 +7,37 @@ use image::{DynamicImage, GenericImageView};
 use nalgebra::DMatrix;
 use rand::{distributions::Uniform, Rng};
 use rand_distr::StandardNormal;
+use utils::kernel::{Padding, Pooling};
+
+/// Rust Convolutional Neural Network (RCN)
+pub struct RCN<'a> {
+    classes: usize,
+    layer_cfg: &'a [RCNLayer<'a>],
+    layer_weights: Vec<DMatrix<f64>>,
+}
+
+/// Characteristics of a convolutional layer
+pub enum RCNLayer<'a> {
+    Convolve2D(Padding),
+    Pool2D(Pooling),
+    Feedforward(&'a [usize]),
+}
+
+impl<'a> RCN<'a> {
+    /// Create new RCN instance
+    ///
+    /// # Arguments
+    /// * `classes` - The number of final classifications to be made
+    /// * `layer_cfg` - A collection of layer configurations
+    ///
+    fn new(classes: usize, layer_cfg: &'a [RCNLayer]) -> Self {
+        RCN {
+            classes,
+            layer_cfg,
+            layer_weights: Vec::new(),
+        }
+    }
+}
 
 /// Log information of the current image.
 pub fn __log_image_info(path: &str, image: &DynamicImage) {
@@ -49,7 +80,7 @@ pub fn get_pixel_matrix(image: &DynamicImage) -> Result<DMatrix<i16>, InvalidGra
 ///
 /// # Arguments
 /// *input_size* - The size of the input layer
-/// *layer_1_size* - The number of
+/// *output_size* - The size of the output layer
 ///
 fn get_xavier_weight_matrix(input_size: usize, output_size: usize) -> DMatrix<f64> {
     // rows, columns
@@ -143,5 +174,20 @@ mod tests {
     fn print_he_init() {
         let (input_size, output_size) = (5, 10);
         println!("{}", get_he_weight_matrix(input_size, output_size));
+    }
+
+    #[test]
+    /// Creating and configuring RCN
+    fn rcn_init() {
+        let model = RCN::new(
+            10,
+            &[
+                RCNLayer::Convolve2D(Padding::Same),
+                RCNLayer::Pool2D(Pooling::Max),
+                RCNLayer::Convolve2D(Padding::Same),
+                RCNLayer::Pool2D(Pooling::Max),
+                RCNLayer::Feedforward(&[10, 20, 20]),
+            ],
+        );
     }
 }
