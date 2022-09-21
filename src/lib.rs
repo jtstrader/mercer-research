@@ -8,6 +8,7 @@ use image::{DynamicImage, GenericImageView};
 use nalgebra::DMatrix;
 use rand::{distributions::Uniform, Rng};
 use rand_distr::StandardNormal;
+use std::ffi::{OsStr, OsString};
 use std::{fs, path::PathBuf};
 use utils::kernel::{Padding, Pooling};
 
@@ -51,25 +52,57 @@ impl<'a> RCN<'a> {
     }
 
     /// Train the model
-    fn train(&mut self, batch_size: usize, epochs: usize) -> Result<(), ImageError> {
-        let classes: Vec<PathBuf> = fs::read_dir(self.training_path)
-            .unwrap()
-            .map(|f| f.unwrap().path())
-            .collect();
-
-        // load training images
-        let mut training_set: Vec<(DMatrix<f64>, PathBuf)> = Vec::new();
-        for class in classes {
-            for path in fs::read_dir(&class).unwrap().map(|f| f.unwrap().path()) {
-                let img = ImageReader::open(&path)?.decode()?;
-                training_set.push((get_pixel_matrix(&img).unwrap(), path));
-            }
-        }
+    fn train(
+        &mut self,
+        batch_size: usize,
+        epochs: usize,
+        class_size_limit: usize,
+    ) -> Result<(), ImageError> {
+        let training_set = load_data(self.training_path, class_size_limit);
 
         println!("Training Set Size: {}", training_set.len());
 
         Ok(())
     }
+}
+
+/// *Internal Function*
+///
+/// Take a path for data (training or testing/validating) and return a vector of the matrices
+/// and their respective class names.
+///
+/// # Arguments
+/// * `path` - The path to the data set
+/// * `class_size_limit` - The absolute limit of data that should be populated per class
+///
+fn load_data(path: &str, class_size_limit: usize) -> Vec<(DMatrix<f64>, OsString)> {
+    let classes: Vec<PathBuf> = fs::read_dir(path)
+        .unwrap()
+        .map(|f| f.unwrap().path())
+        .collect();
+
+    let mut dset: Vec<(DMatrix<f64>, OsString)> = Vec::new();
+    for class in classes {
+        // class is the last directory of the path
+        let class_id = OsString::from(class.file_name().unwrap());
+
+        let mut paths: Vec<PathBuf> = fs::read_dir(&class)
+            .unwrap()
+            .map(|f| f.unwrap().path())
+            .collect();
+
+        for _ in 0..class_size_limit {
+            let idx = rand::thread_rng().gen_range(0..paths.len());
+            let img = ImageReader::open(&paths.remove(idx))
+                .unwrap()
+                .decode()
+                .unwrap()
+                .grayscale();
+            dset.push((get_pixel_matrix(&img).unwrap(), class_id.clone()));
+        }
+    }
+
+    dset
 }
 
 /// Log information of the current image.
@@ -225,6 +258,6 @@ mod tests {
             "images\\mnist_png\\valid",
         );
 
-        model.train(0, 0).unwrap();
+        model.train(0, 0, 100).unwrap();
     }
 }
