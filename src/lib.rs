@@ -8,9 +8,11 @@ use image::{DynamicImage, GenericImageView};
 use nalgebra::DMatrix;
 use rand::{distributions::Uniform, Rng};
 use rand_distr::StandardNormal;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::{fs, path::PathBuf};
-use utils::kernel::{Padding, Pooling};
+use utils::kernel::{Padding, Pooling, SeparableOperator};
+
+use crate::utils::kernel::{Convolve2D, Pool2D};
 
 /// Rust Convolutional Neural Network (RCN)
 pub struct RCN<'a> {
@@ -28,6 +30,14 @@ pub enum RCNLayer<'a> {
     Pool2D(Pooling),
     Feedforward(&'a [usize]),
 }
+
+/// List of operators that can be iterated through for convolutions
+const SEP_OPS: [SeparableOperator; 4] = [
+    SeparableOperator::Top,
+    SeparableOperator::Left,
+    SeparableOperator::Right,
+    SeparableOperator::Bottom,
+];
 
 impl<'a> RCN<'a> {
     /// Create new RCN instance
@@ -62,6 +72,58 @@ impl<'a> RCN<'a> {
 
         println!("Training Set Size: {}", training_set.len());
 
+        // FIXME: verify all classes are touched, remove later
+        let mut count = 0;
+
+        // Highest level loop is the epoch loop, since all inner code will be working through the entire dataset
+        for _ in 0..epochs {
+            // go through a single image each time from each class
+            // iterator to get data should be able to shift class_size_limit in training_set
+            for shift in 0..training_set.len() / self.classes {
+                for i in 0..self.classes {
+                    count += 1;
+                    // each iteration represents one sample training
+                    let m = &training_set[shift * self.classes + i].0;
+                    let mut feature_set: Vec<DMatrix<f64>> = Vec::new();
+
+                    for layer in self.layer_cfg {
+                        match layer {
+                            RCNLayer::Convolve2D(p) => {
+                                // build feature set from current matrix if feature_set is not already populated
+                                if feature_set.len() != 0 {
+                                    // preserve current length and iterate over those only
+                                    let curr_len = feature_set.len();
+                                    for i in 0..curr_len {
+                                        let mut it = SEP_OPS.iter().peekable();
+
+                                        // if feature set is populated, change current matrix and extend any other matrices
+                                        while let Some(op) = it.next() {
+                                            if it.peek().is_none() {
+                                                feature_set[i] =
+                                                    feature_set[i].convolve_2d_separated(*op, p)
+                                            } else {
+                                                feature_set.push(
+                                                    feature_set[i].convolve_2d_separated(*op, p),
+                                                );
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    feature_set
+                                        .extend(SEP_OPS.map(|op| m.convolve_2d_separated(op, p)));
+                                }
+                            }
+                            RCNLayer::Pool2D(p) => {
+                                for feature in &mut feature_set {
+                                    *feature = feature.pool_2d(&Padding::Same, p);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -257,7 +319,23 @@ mod tests {
             "images\\mnist_png\\train",
             "images\\mnist_png\\valid",
         );
+    }
 
-        model.train(0, 0, 100).unwrap();
+    #[test]
+    /// Testing Convolve2D layers
+    fn convolve_2d_test() {
+        let mut model = RCN::new(
+            10,
+            &[
+                RCNLayer::Convolve2D(Padding::Same),
+                RCNLayer::Pool2D(Pooling::Max),
+                RCNLayer::Convolve2D(Padding::Same),
+                RCNLayer::Pool2D(Pooling::Max),
+            ],
+            "images\\mnist_png\\train",
+            "images\\mnist_png\\valid",
+        );
+
+        model.train(1, 1, 1).unwrap();
     }
 }

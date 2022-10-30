@@ -11,6 +11,7 @@ use num::{One, Zero};
 use std::ops::{AddAssign, Mul, Sub};
 
 /// An operator that can be used in convolutions with true separation (not depthwise)
+#[derive(Clone, Copy)]
 pub enum SeparableOperator {
     Top,
     Bottom,
