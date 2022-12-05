@@ -17,7 +17,8 @@ use crate::utils::kernel::{Convolve2D, Pool2D};
 /// Rust Convolutional Neural Network (RCN)
 pub struct RCN<'a> {
     classes: usize,
-    layer_cfg: &'a [RCNLayer<'a>],
+    convpool_cfg: &'a [RCNLayer],
+    feedforward_cfg: &'a [usize],
     layer_weights: Vec<DMatrix<f64>>,
 
     training_path: &'a str,
@@ -25,10 +26,9 @@ pub struct RCN<'a> {
 }
 
 /// Characteristics of a layer
-pub enum RCNLayer<'a> {
+pub enum RCNLayer {
     Convolve2D(Padding),
     Pool2D(Pooling),
-    Feedforward(&'a [usize]),
 }
 
 /// List of operators that can be iterated through for convolutions
@@ -48,13 +48,15 @@ impl<'a> RCN<'a> {
     ///
     fn new(
         classes: usize,
-        layer_cfg: &'a [RCNLayer],
+        convpool_cfg: &'a [RCNLayer],
+        feedforward_cfg: &'a [usize],
         training_path: &'a str,
         testing_path: &'a str,
     ) -> Self {
         RCN {
             classes,
-            layer_cfg,
+            convpool_cfg,
+            feedforward_cfg,
             layer_weights: Vec::new(),
             training_path,
             testing_path,
@@ -62,6 +64,12 @@ impl<'a> RCN<'a> {
     }
 
     /// Train the model
+    ///
+    /// # Arguments
+    /// * `batch_size` - The number of samples processed before the model is updated
+    /// * `epochs` - The number of total passes through the training set
+    /// * `class_size_limit` - A limiter on the number of samples to use per class
+    ///
     fn train(
         &mut self,
         batch_size: usize,
@@ -70,27 +78,21 @@ impl<'a> RCN<'a> {
     ) -> Result<(), ImageError> {
         let training_set = load_data(self.training_path, class_size_limit);
 
-        println!("Training Set Size: {}", training_set.len());
-
-        // FIXME: verify all classes are touched, remove later
-        let mut count = 0;
-
         // Highest level loop is the epoch loop, since all inner code will be working through the entire dataset
         for _ in 0..epochs {
             // go through a single image each time from each class
             // iterator to get data should be able to shift class_size_limit in training_set
             for shift in 0..training_set.len() / self.classes {
                 for i in 0..self.classes {
-                    count += 1;
                     // each iteration represents one sample training
                     let m = &training_set[shift * self.classes + i].0;
                     let mut feature_set: Vec<DMatrix<f64>> = Vec::new();
 
-                    for layer in self.layer_cfg {
+                    for layer in self.convpool_cfg {
                         match layer {
                             RCNLayer::Convolve2D(p) => {
                                 // build feature set from current matrix if feature_set is not already populated
-                                if feature_set.len() != 0 {
+                                if !feature_set.is_empty() {
                                     // preserve current length and iterate over those only
                                     let curr_len = feature_set.len();
                                     for i in 0..curr_len {
@@ -118,13 +120,52 @@ impl<'a> RCN<'a> {
                                     *feature = feature.pool_2d(&Padding::Same, p);
                                 }
                             }
-                            _ => {}
                         }
                     }
                 }
             }
         }
         Ok(())
+    }
+
+    /// *Internal Function*
+    ///
+    /// Generate the weight matrices based on a given input size for the classes.
+    /// Assume that all classes will have the same size inputs.
+    ///
+    /// # Arguments
+    /// * `sample_shape` - The dimensions of a sample, used to calculate the total input layer size
+    ///
+    fn __load_weights(&mut self, sample_shape: (usize, usize)) {
+        self.layer_weights = Vec::with_capacity(self.feedforward_cfg.len() + 1);
+
+        let (mut c, mut p) = (0, 0);
+        for layer in self.convpool_cfg {
+            match layer {
+                RCNLayer::Convolve2D(_) => {
+                    c += 1;
+                }
+                RCNLayer::Pool2D(_) => {
+                    p += 2;
+                }
+            }
+        }
+
+        // a & b == weight matrix shape (b rows and a columns)
+        // 4^c * 1/(2^p) * f_w * f_h = input layer len (initial a)
+        let mut a = usize::pow(4, c) / usize::pow(2, p) * sample_shape.0 * sample_shape.1;
+        let mut b = self.feedforward_cfg[0];
+        for i in 0..self.layer_weights.capacity() {
+            self.layer_weights.push(get_he_weight_matrix(a, b));
+            (a, b) = (
+                b,
+                if i + 1 < self.feedforward_cfg.len() {
+                    self.feedforward_cfg[i + 1]
+                } else {
+                    self.classes
+                },
+            );
+        }
     }
 }
 
@@ -155,7 +196,7 @@ fn load_data(path: &str, class_size_limit: usize) -> Vec<(DMatrix<f64>, OsString
 
         for _ in 0..class_size_limit {
             let idx = rand::thread_rng().gen_range(0..paths.len());
-            let img = ImageReader::open(&paths.remove(idx))
+            let img = ImageReader::open(paths.remove(idx))
                 .unwrap()
                 .decode()
                 .unwrap()
@@ -175,20 +216,16 @@ pub fn __log_image_info(path: &str, image: &DynamicImage) {
     println!("Byte Count: {}", image.as_bytes().len());
 }
 
-/// Generate a matrix of pixels from a provided image.
+/// Generate a matrix of pixels from a provided image. Every pixel in the pixel iterator is a tuple struct of type
+/// Luma that contains a single element array. The first value can be obtained immediately using .0 and then index
+/// into the single element.
+///
+/// Can accept either Luma8 or LumaA8. Alpha channels are ignored.
 ///
 /// # Arguments
 /// * `image` - A dynamic image reference, expected to be in grayscale.
 ///
 pub fn get_pixel_matrix(image: &DynamicImage) -> Result<DMatrix<f64>, InvalidGrayscaleImageError> {
-    // Every pixel in the pixel iterator is a tuple struct of type Luma that contains a single element array.
-    // The first value can be obtained immediately using .0 and then index into the single element.
-    //
-    // Data is converted into i16 form so it can later be convolved against negative values. Note that converting
-    // between u8 and i8 is not safe and may result in overflow. Therefore, i16 is used to guarantee that no data
-    // is lost when convolving.
-    //
-    // Can accept either Luma8 or LumaA8. Alpha channels are ignored.
     match image {
         DynamicImage::ImageLuma8(gray_image) => Ok(DMatrix::from_row_iterator(
             gray_image.dimensions().1 as usize,
@@ -235,7 +272,7 @@ fn get_xavier_weight_matrix(input_size: usize, output_size: usize) -> DMatrix<f6
 ///
 fn get_he_weight_matrix(input_size: usize, output_size: usize) -> DMatrix<f64> {
     // rows, columns
-    let dims = (output_size, input_size + 1);
+    let dims = (output_size, input_size);
 
     let std: f64 = (2_f64 / input_size as f64).sqrt();
 
@@ -293,7 +330,7 @@ mod tests {
         let (input_size, output_size) = (100, 32);
         assert_eq!(
             get_he_weight_matrix(input_size, output_size).len(),
-            output_size * (input_size + 1)
+            output_size * input_size
         );
     }
 
@@ -307,23 +344,25 @@ mod tests {
     #[test]
     /// Creating and configuring RCN
     fn rcn_init() {
-        let mut model = RCN::new(
+        let model = RCN::new(
             10,
             &[
                 RCNLayer::Convolve2D(Padding::Same),
                 RCNLayer::Pool2D(Pooling::Max),
                 RCNLayer::Convolve2D(Padding::Same),
                 RCNLayer::Pool2D(Pooling::Max),
-                RCNLayer::Feedforward(&[10, 20, 20]),
             ],
+            &[1],
             "images\\mnist_png\\train",
             "images\\mnist_png\\valid",
         );
+
+        assert_eq!(model.classes, 10);
     }
 
     #[test]
-    /// Testing Convolve2D layers
-    fn convolve_2d_test() {
+    /// Generate weight matrices
+    fn weight_matrices() {
         let mut model = RCN::new(
             10,
             &[
@@ -332,10 +371,19 @@ mod tests {
                 RCNLayer::Convolve2D(Padding::Same),
                 RCNLayer::Pool2D(Pooling::Max),
             ],
+            &[15, 12],
             "images\\mnist_png\\train",
             "images\\mnist_png\\valid",
         );
 
-        model.train(1, 1, 1).unwrap();
+        let training_set = load_data(model.training_path, 100);
+        model.__load_weights(training_set[0].0.shape());
+
+        assert_eq!(model.layer_weights[0].shape(), (15, 784));
+        assert_eq!(model.layer_weights[1].shape(), (12, 15));
+        assert_eq!(model.layer_weights[2].shape(), (10, 12));
+
+        // Sample what a layer may look like
+        println!("{}", model.layer_weights[2]);
     }
 }
