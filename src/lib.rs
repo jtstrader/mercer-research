@@ -46,7 +46,7 @@ impl<'a> RCN<'a> {
     /// * `classes` - The number of final classifications to be made
     /// * `layer_cfg` - A collection of layer configurations
     ///
-    fn new(
+    pub fn new(
         classes: usize,
         convpool_cfg: &'a [RCNLayer],
         feedforward_cfg: &'a [usize],
@@ -70,7 +70,7 @@ impl<'a> RCN<'a> {
     /// * `epochs` - The number of total passes through the training set
     /// * `class_size_limit` - A limiter on the number of samples to use per class
     ///
-    fn train(
+    pub fn train(
         &mut self,
         batch_size: usize,
         epochs: usize,
@@ -86,46 +86,50 @@ impl<'a> RCN<'a> {
                 for i in 0..self.classes {
                     // each iteration represents one sample training
                     let m = &training_set[shift * self.classes + i].0;
-                    let mut feature_set: Vec<DMatrix<f64>> = Vec::new();
-
-                    for layer in self.convpool_cfg {
-                        match layer {
-                            RCNLayer::Convolve2D(p) => {
-                                // build feature set from current matrix if feature_set is not already populated
-                                if !feature_set.is_empty() {
-                                    // preserve current length and iterate over those only
-                                    let curr_len = feature_set.len();
-                                    for i in 0..curr_len {
-                                        let mut it = SEP_OPS.iter().peekable();
-
-                                        // if feature set is populated, change current matrix and extend any other matrices
-                                        while let Some(op) = it.next() {
-                                            if it.peek().is_none() {
-                                                feature_set[i] =
-                                                    feature_set[i].convolve_2d_separated(*op, p)
-                                            } else {
-                                                feature_set.push(
-                                                    feature_set[i].convolve_2d_separated(*op, p),
-                                                );
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    feature_set
-                                        .extend(SEP_OPS.map(|op| m.convolve_2d_separated(op, p)));
-                                }
-                            }
-                            RCNLayer::Pool2D(p) => {
-                                for feature in &mut feature_set {
-                                    *feature = feature.pool_2d(&Padding::Same, p);
-                                }
-                            }
-                        }
-                    }
+                    let mut input: Vec<f64> = self.flatten_feature_set(m);
                 }
             }
         }
         Ok(())
+    }
+
+    fn flatten_feature_set(&mut self, m: &DMatrix<f64>) -> Vec<f64> {
+        let mut feature_set: Vec<DMatrix<f64>> = Vec::new();
+        for layer in self.convpool_cfg {
+            match layer {
+                RCNLayer::Convolve2D(p) => {
+                    // build feature set from current matrix if feature_set is not already populated
+                    if !feature_set.is_empty() {
+                        // preserve current length and iterate over those only
+                        let curr_len = feature_set.len();
+                        for i in 0..curr_len {
+                            let mut it = SEP_OPS.iter().peekable();
+
+                            // if feature set is populated, change current matrix and extend any other matrices
+                            while let Some(op) = it.next() {
+                                if it.peek().is_none() {
+                                    feature_set[i] = feature_set[i].convolve_2d_separated(*op, p)
+                                } else {
+                                    feature_set.push(feature_set[i].convolve_2d_separated(*op, p));
+                                }
+                            }
+                        }
+                    } else {
+                        feature_set.extend(SEP_OPS.map(|op| m.convolve_2d_separated(op, p)));
+                    }
+                }
+                RCNLayer::Pool2D(p) => {
+                    for feature in &mut feature_set {
+                        *feature = feature.pool_2d(&Padding::Same, p);
+                    }
+                }
+            }
+        }
+
+        feature_set
+            .iter()
+            .flat_map(|m| m.into_iter().copied().collect::<Vec<f64>>())
+            .collect::<Vec<f64>>()
     }
 
     /// *Internal Function*
@@ -136,7 +140,7 @@ impl<'a> RCN<'a> {
     /// # Arguments
     /// * `sample_shape` - The dimensions of a sample, used to calculate the total input layer size
     ///
-    fn __load_weights(&mut self, sample_shape: (usize, usize)) {
+    fn load_weights(&mut self, sample_shape: (usize, usize)) {
         self.layer_weights = Vec::with_capacity(self.feedforward_cfg.len() + 1);
 
         let (mut c, mut p) = (0, 0);
@@ -377,7 +381,7 @@ mod tests {
         );
 
         let training_set = load_data(model.training_path, 100);
-        model.__load_weights(training_set[0].0.shape());
+        model.load_weights(training_set[0].0.shape());
 
         assert_eq!(model.layer_weights[0].shape(), (15, 784));
         assert_eq!(model.layer_weights[1].shape(), (12, 15));
