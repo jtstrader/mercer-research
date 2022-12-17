@@ -91,6 +91,9 @@ where
     /// Default Sobel kernel dimensions are 3x3, meaning target matrix's dimensions must be > 3x3.
     ///
     fn convolve_2d_separated(&self, op: SeparableOperator, padding: &Padding) -> DMatrix<N>;
+
+    /// Activate the convoluted matrix with ReLU
+    fn relu(&self) -> DMatrix<N>;
 }
 
 impl<N, R1, C1, S1> Convolve2D<N, R1, C1, S1> for Matrix<N, R1, C1, S1>
@@ -197,6 +200,16 @@ where
         let separated_kernel: (Matrix3x1<N>, Matrix1x3<N>) = sobel_separated(op);
         self.convolve_2d(&separated_kernel.0, padding)
             .convolve_2d(&separated_kernel.1, padding)
+            .relu()
+    }
+
+    fn relu(&self) -> DMatrix<N> {
+        DMatrix::from_iterator(
+            self.nrows(),
+            self.ncols(),
+            self.iter()
+                .map(|f| if *f >= N::zero() { *f } else { N::zero() }),
+        )
     }
 }
 
