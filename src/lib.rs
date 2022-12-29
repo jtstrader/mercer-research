@@ -7,7 +7,7 @@ use image::{io::Reader as ImageReader, ImageError};
 use image::{DynamicImage, GenericImageView};
 use nalgebra::{DMatrix, DVector};
 use rand::seq::SliceRandom;
-use rand::{distributions::Uniform, Rng};
+use rand::Rng;
 use rand_distr::StandardNormal;
 use std::f64::consts::E;
 use std::{fs, path::PathBuf};
@@ -507,40 +507,7 @@ mod tests {
 
     #[test]
     /// Test obtaining weight values
-    fn xavier_init() {
-        let (input_size, output_size) = (100, 32);
-        assert_eq!(
-            get_xavier_weight_matrix(input_size, output_size).len(),
-            output_size * (input_size + 1)
-        );
-    }
-
-    #[test]
-    /// Print sample matrix from init_weight
-    fn print_xavier_init() {
-        let (input_size, output_size) = (5, 10);
-        println!("{}", get_xavier_weight_matrix(input_size, output_size));
-    }
-
-    #[test]
-    /// Verify no value in the weight matrix is outside the distribution range
-    fn check_weight_in_range() {
-        let (input_size, output_size) = (30, 300);
-        let m = get_xavier_weight_matrix(input_size, output_size);
-
-        let (upper, lower) = (
-            1_f64 / (input_size as f64).sqrt(),
-            -1_f64 / (input_size as f64).sqrt(),
-        );
-
-        for x in m.into_iter() {
-            assert!(*x >= lower && *x <= upper);
-        }
-    }
-
-    #[test]
-    /// Test obtaining weight values
-    fn he_init() {
+    fn weight_init() {
         let (input_size, output_size) = (100, 32);
         assert_eq!(
             get_weight_matrix(input_size, output_size).len(),
@@ -550,7 +517,7 @@ mod tests {
 
     #[test]
     /// Print sample matrix from init_weight
-    fn print_he_init() {
+    fn print_weight_init() {
         let (input_size, output_size) = (5, 10);
         println!("{}", get_weight_matrix(input_size, output_size));
     }
