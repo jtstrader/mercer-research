@@ -101,9 +101,6 @@ impl<'a> RCN<'a> {
         let mut testing_set: Vec<InputSet> = self.load_data(self.testing_path, class_size_limit);
         self.load_weights_and_bias(training_set[0].0.len());
 
-        println!("{}", self.layer_weights[1]);
-        println!("{}", self.layer_bias[0]);
-
         let (mean, sd) = self.get_scales(&training_set);
         for v in &mut training_set {
             for r in 0..v.0.nrows() {
@@ -128,15 +125,12 @@ impl<'a> RCN<'a> {
                 self.train_batch(batch, eta);
             }
 
-            println!("{}", self.layer_weights[1]);
-            println!("{}", self.layer_bias[0]);
-
             // Run through test data to show network change
             let mut accept = 0;
             for (test, expectation) in &testing_set {
                 let res = self.classify(test);
                 let res = res.map(|v| if v == res.max() { 1_f64 } else { 0_f64 });
-                accept += if &res == expectation { 1 } else { 0 };
+                accept += i32::from(&res == expectation);
             }
             println!("Epoch {}: {}/{}", e, accept, testing_set.len());
         }
@@ -198,21 +192,21 @@ impl<'a> RCN<'a> {
     fn get_scales(&self, iv: &Vec<InputSet>) -> (f64, f64) {
         let mut mean = 0_f64;
         let mut sd = 0_f64;
-        let N = iv[0].0.len() as f64 * iv.len() as f64;
+        let n = iv[0].0.len() as f64 * iv.len() as f64;
 
         for v in iv {
             for r in 0..v.0.nrows() {
                 mean += v.0[r];
             }
         }
-        mean /= N;
+        mean /= n;
 
         for v in iv {
             for r in 0..v.0.nrows() {
                 sd += f64::powi(v.0[r] - mean, 2);
             }
         }
-        sd = f64::sqrt(sd / N);
+        sd = f64::sqrt(sd / n);
 
         (mean, sd)
     }
@@ -244,17 +238,12 @@ impl<'a> RCN<'a> {
         let mut activations: Vec<DVector<f64>> = vec![x.clone()];
         let mut zs: Vec<DVector<f64>> = Vec::new();
 
-        // println!("Initial Activation:\n{}", curr_activation);
-
         for (b, w) in self.layer_bias.iter().zip(self.layer_weights.iter()) {
             let z = w * curr_activation + b;
             zs.push(z.clone());
             curr_activation = sigmoid(&z);
             activations.push(curr_activation.clone());
-            // println!("Mid-feed Activation:\n{}", curr_activation);
         }
-
-        // println!("Final Activation:\n{}", activations[activations.len() - 1]);
 
         let db_end = del_b.len() - 1;
         let dw_end = del_w.len() - 1;
@@ -276,12 +265,6 @@ impl<'a> RCN<'a> {
             del_b[db_end - l] = delta.clone();
             del_w[dw_end - l] = delta.clone() * activations[activ_end - l - 1].transpose();
         }
-
-        // for w in &del_w[1..] {
-        //     println!("{}", w);
-        // }
-
-        // wait();
 
         (del_b, del_w)
     }
@@ -344,7 +327,7 @@ impl<'a> RCN<'a> {
 
         let mut dset: Vec<InputSet> = Vec::new();
         for (i, class) in classes.iter().enumerate() {
-            let mut paths: Vec<PathBuf> = fs::read_dir(&class)
+            let mut paths: Vec<PathBuf> = fs::read_dir(class)
                 .unwrap()
                 .map(|f| f.unwrap().path())
                 .collect();
@@ -364,17 +347,6 @@ impl<'a> RCN<'a> {
         }
 
         dset
-    }
-
-    /// *Internal Function*
-    ///
-    /// Scale the data to be between [0, 1]
-    ///
-    /// # Arguments
-    /// * `v` - The input vector to scale
-    ///
-    fn scale(&self, v: &mut DVector<f64>) {
-        for x in v.iter_mut() {}
     }
 
     /// *Internal Function*
@@ -406,8 +378,8 @@ impl<'a> RCN<'a> {
         let mut a = usize::pow(4, c) / usize::pow(2, p) * l;
         let mut b = self.feedforward_cfg[0];
         for i in 0..self.layer_weights.capacity() {
-            self.layer_weights.push(get_he_weight_matrix(a, b));
-            self.layer_bias.push(get_he_bias_vector(b));
+            self.layer_weights.push(get_weight_matrix(a, b));
+            self.layer_bias.push(get_bias_vector(b));
             (a, b) = (
                 b,
                 if i + 1 < self.feedforward_cfg.len() {
@@ -497,41 +469,15 @@ fn sigmoid_prime(v: &DVector<f64>) -> DVector<f64> {
     sigmoid(v).component_mul(&sigmoid(v).map(|x| 1_f64 - x))
 }
 
-/// Generate set of weights using Xavier initializing.
+/// Generate set of weights
 ///
 /// # Arguments
 /// * `input_size` - The size of the input layer
 /// * `output_size` - The size of the output layer
 ///
-fn get_xavier_weight_matrix(input_size: usize, output_size: usize) -> DMatrix<f64> {
-    // rows, columns
-    let dims = (output_size, input_size + 1);
-
-    let (upper, lower) = (
-        1_f64 / (input_size as f64).sqrt(),
-        -1_f64 / (input_size as f64).sqrt(),
-    );
-
-    DMatrix::from_iterator(
-        dims.0,
-        dims.1,
-        rand::thread_rng()
-            .sample_iter(Uniform::new_inclusive(lower, upper))
-            .take(dims.0 * dims.1),
-    )
-}
-
-/// Generate set of weights using He initialization
-///
-/// # Arguments
-/// * `input_size` - The size of the input layer
-/// * `output_size` - The size of the output layer
-///
-fn get_he_weight_matrix(input_size: usize, output_size: usize) -> DMatrix<f64> {
+fn get_weight_matrix(input_size: usize, output_size: usize) -> DMatrix<f64> {
     // rows, columns
     let dims = (output_size, input_size);
-
-    let std: f64 = (2_f64 / input_size as f64).sqrt();
 
     DMatrix::from_iterator(
         dims.0,
@@ -547,17 +493,11 @@ fn get_he_weight_matrix(input_size: usize, output_size: usize) -> DMatrix<f64> {
 /// # Arguments
 /// * `neurons` - The number of neurons to build a bias for
 ///
-fn get_he_bias_vector(neurons: usize) -> DVector<f64> {
+fn get_bias_vector(neurons: usize) -> DVector<f64> {
     DVector::from_iterator(
         neurons,
         rand::thread_rng().sample_iter(StandardNormal).take(neurons),
     )
-}
-
-fn wait() {
-    use std::io::stdin;
-    let mut s = String::new();
-    stdin().read_line(&mut s).unwrap();
 }
 
 #[cfg(test)]
@@ -603,7 +543,7 @@ mod tests {
     fn he_init() {
         let (input_size, output_size) = (100, 32);
         assert_eq!(
-            get_he_weight_matrix(input_size, output_size).len(),
+            get_weight_matrix(input_size, output_size).len(),
             output_size * input_size
         );
     }
@@ -612,7 +552,7 @@ mod tests {
     /// Print sample matrix from init_weight
     fn print_he_init() {
         let (input_size, output_size) = (5, 10);
-        println!("{}", get_he_weight_matrix(input_size, output_size));
+        println!("{}", get_weight_matrix(input_size, output_size));
     }
 
     #[test]
