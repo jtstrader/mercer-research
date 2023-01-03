@@ -95,10 +95,13 @@ impl<'a> RCN<'a> {
         batch_size: usize,
         epochs: usize,
         eta: f64,
-        class_size_limit: usize,
+        training_class_size_limit: usize,
+        testing_class_size_limit: usize,
     ) -> Result<(), ImageError> {
-        let mut training_set: Vec<InputSet> = self.load_data(self.training_path, class_size_limit);
-        let mut testing_set: Vec<InputSet> = self.load_data(self.testing_path, class_size_limit);
+        let mut training_set: Vec<InputSet> =
+            self.load_data(self.training_path, training_class_size_limit);
+        let mut testing_set: Vec<InputSet> =
+            self.load_data(self.testing_path, testing_class_size_limit);
         self.load_weights_and_bias(training_set[0].0.len());
 
         let (mean, sd) = self.get_scales(&training_set);
@@ -132,7 +135,13 @@ impl<'a> RCN<'a> {
                 let res = res.map(|v| if v == res.max() { 1_f64 } else { 0_f64 });
                 accept += i32::from(&res == expectation);
             }
-            println!("Epoch {}: {}/{}", e, accept, testing_set.len());
+            println!(
+                "Epoch {}: {}/{} [{:.2}%]",
+                e,
+                accept,
+                testing_set.len(),
+                (accept as f64 / testing_set.len() as f64) * 100_f64
+            );
         }
         Ok(())
     }
@@ -331,6 +340,15 @@ impl<'a> RCN<'a> {
                 .unwrap()
                 .map(|f| f.unwrap().path())
                 .collect();
+
+            if class_size_limit > paths.len() {
+                panic!(
+                    "provided class_size_limit for {} too large! expected {} <= {}",
+                    path,
+                    class_size_limit,
+                    paths.len()
+                );
+            }
 
             for _ in 0..class_size_limit {
                 let idx = rand::thread_rng().gen_range(0..paths.len());
@@ -534,8 +552,8 @@ mod tests {
                 RCNLayer::Pool2D(Pooling::Max),
             ],
             &[10, 10],
-            "images\\mnist_png\\train",
-            "images\\mnist_png\\valid",
+            "images/mnist_png/training",
+            "images/mnist_png/testing",
         );
 
         assert_eq!(model.classes, 10);
@@ -552,10 +570,10 @@ mod tests {
                 RCNLayer::Pool2D(Pooling::Max),
             ],
             &[10, 10],
-            "images\\mnist_png\\train",
-            "images\\mnist_png\\valid",
+            "images/mnist_png/training",
+            "images/mnist_png/testing",
         );
 
-        model.train(10, 10, 3_f64, 50).unwrap();
+        model.train(10, 10, 3_f64, 50, 50).unwrap();
     }
 }

@@ -13,9 +13,8 @@ fn main() {
             RCNLayer::Pool2D(Pooling::Max),
         ],
         &[30],
-        "images\\mnist_png\\train",
-        "images\\mnist_png\\valid",
+        "images/mnist_png/training",
+        "images/mnist_png/testing",
     );
-
-    model.train(10, 100, 3_f64, 500).unwrap();
+    model.train(10, 100, 3_f64, 1000, 800).unwrap();
 }
