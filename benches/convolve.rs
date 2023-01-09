@@ -10,7 +10,7 @@ use nalgebra::DMatrix;
 
 fn get_image_data() -> DMatrix<f64> {
     get_pixel_matrix(
-        &ImageReader::open("images\\mnist_png\\train\\4\\2.png")
+        &ImageReader::open("images/mnist_png/training/4/2.png")
             .unwrap()
             .decode()
             .unwrap(),
