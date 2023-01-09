@@ -1,7 +1,7 @@
 use clap::Parser;
 use mercer_research::{
+    rcn::{RCNLayer, RCN},
     utils::kernel::{Padding, Pooling},
-    RCNLayer, RCN,
 };
 
 #[derive(Parser)]

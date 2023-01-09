@@ -1,7 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use mercer_research::{
+    rcn::RCNLayer,
+    rcn::RCN,
     utils::kernel::{Padding, Pooling},
-    RCNLayer, RCN,
 };
 
 pub fn train_model(c: &mut Criterion) {
@@ -15,10 +16,10 @@ pub fn train_model(c: &mut Criterion) {
                 RCNLayer::Pool2D(Pooling::Max),
             ],
             &[30],
-            "images\\mnist_png\\train",
-            "images\\mnist_png\\valid",
+            "images/mnist_png/training",
+            "images/mnist_png/testing",
         );
-        b.iter(|| model.train(10, 50, 3_f64, 200).unwrap());
+        b.iter(|| model.train(10, 50, 3_f64, 500, 500).unwrap());
     });
 }
 
