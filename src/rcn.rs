@@ -3,7 +3,9 @@ use nalgebra::{DMatrix, DVector};
 use rand::seq::SliceRandom;
 use rand::Rng;
 use rand_distr::StandardNormal;
+use rayon::prelude::*;
 use std::f64::consts::E;
+use std::sync::{Arc, Mutex};
 use std::{fs, path::PathBuf};
 
 use crate::utils::kernel::{Convolve2D, Padding, Pool2D, Pooling, SeparableOperator};
@@ -146,30 +148,38 @@ impl<'a> RCN<'a> {
     /// * `eta` - The learning rate
     ///
     fn train_batch(&mut self, batch: &[InputSet], eta: f64) {
-        let mut del_w: Vec<DMatrix<f64>> = self
-            .layer_weights
-            .iter()
-            .map(|w| DMatrix::zeros(w.shape().0, w.shape().1))
-            .collect();
-        let mut del_b: Vec<DVector<f64>> = self
-            .layer_bias
-            .iter()
-            .map(|b| DVector::zeros(b.nrows()))
-            .collect();
-
-        for (x, y) in batch {
-            let (delta_del_b, delta_del_w) = self.backprop(x, y);
-            del_b = delta_del_b
+        let del_w: Arc<Mutex<Vec<DMatrix<f64>>>> = Arc::new(Mutex::new(
+            self.layer_weights
                 .iter()
-                .zip(del_b.iter())
+                .map(|w| DMatrix::zeros(w.shape().0, w.shape().1))
+                .collect(),
+        ));
+        let del_b: Arc<Mutex<Vec<DVector<f64>>>> = Arc::new(Mutex::new(
+            self.layer_bias
+                .iter()
+                .map(|b| DVector::zeros(b.nrows()))
+                .collect(),
+        ));
+
+        batch.par_iter().for_each(|(x, y)| {
+            let (delta_del_b, delta_del_w) = self.backprop(x, y);
+            let mut del_ub = del_b.lock().unwrap();
+            let mut del_uw = del_w.lock().unwrap();
+
+            *del_ub = delta_del_b
+                .iter()
+                .zip(del_ub.iter())
                 .map(|(db, b)| db + b)
                 .collect();
-            del_w = delta_del_w
+            *del_uw = delta_del_w
                 .iter()
-                .zip(del_w.iter())
+                .zip(del_uw.iter())
                 .map(|(dw, w)| dw + w)
                 .collect();
-        }
+        });
+
+        let del_w = Arc::try_unwrap(del_w).unwrap().into_inner().unwrap();
+        let del_b = Arc::try_unwrap(del_b).unwrap().into_inner().unwrap();
 
         self.layer_weights = self
             .layer_weights
@@ -263,7 +273,7 @@ impl<'a> RCN<'a> {
             let sp = sigmoid_prime(&zs[zs_end - l]);
             delta = (self.layer_weights[weight_end - l + 1].transpose() * delta).component_mul(&sp);
             del_b[db_end - l] = delta.clone();
-            del_w[dw_end - l] = delta.clone() * activations[activ_end - l - 1].transpose();
+            del_w[dw_end - l] = &delta * activations[activ_end - l - 1].transpose();
         }
 
         (del_b, del_w)
