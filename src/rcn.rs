@@ -95,25 +95,9 @@ impl<'a> RCN<'a> {
     ) -> Result<(), ImageError> {
         let mut training_set: Vec<InputSet> =
             self.load_data(self.training_path, training_class_size_limit);
-        let mut testing_set: Vec<InputSet> =
+        let testing_set: Vec<InputSet> =
             self.load_data(self.testing_path, testing_class_size_limit);
         self.load_weights_and_bias(training_set[0].0.len());
-
-        let (mean, sd) = self.get_scales(&training_set);
-        for v in &mut training_set {
-            for r in 0..v.0.nrows() {
-                let d = (v.0[r] - mean) / sd;
-                v.0[r] = if d >= 0_f64 { d } else { 0_f64 };
-            }
-        }
-
-        let (mean, sd) = self.get_scales(&testing_set);
-        for v in &mut testing_set {
-            for r in 0..v.0.nrows() {
-                let d = (v.0[r] - mean) / sd;
-                v.0[r] = if d >= 0_f64 { d } else { 0_f64 };
-            }
-        }
 
         // Highest level loop is the epoch loop, since all inner code will be working through the entire dataset
         for e in 0..epochs {
@@ -362,6 +346,14 @@ impl<'a> RCN<'a> {
                     self.flatten_feature_set(&crate::get_pixel_matrix(&img).unwrap()),
                     get_expected_vec(i, classes.len()),
                 ));
+            }
+        }
+
+        let (mean, sd) = self.get_scales(&dset);
+        for v in &mut dset {
+            for r in 0..v.0.nrows() {
+                let d = (v.0[r] - mean) / sd;
+                v.0[r] = if d >= 0_f64 { d } else { 0_f64 };
             }
         }
 
