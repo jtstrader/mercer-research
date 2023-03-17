@@ -8,6 +8,7 @@ use nalgebra::{
     matrix, DMatrix, Dim, Dynamic, Matrix, Matrix1x3, Matrix3, Matrix3x1, Scalar, Storage,
 };
 use num::{One, Zero};
+use serde::{Deserialize, Serialize};
 use std::ops::{AddAssign, Mul, Sub};
 
 /// An operator that can be used in convolutions with true separation (not depthwise)
@@ -19,12 +20,14 @@ pub enum SeparableOperator {
     Right,
 }
 
+#[derive(Serialize, Deserialize)]
 /// Determine padding type to be used during convolution
 pub enum Padding {
     None,
     Same,
 }
 
+#[derive(Serialize, Deserialize)]
 /// Determine the pooling type to be used in the pooling layer
 pub enum Pooling {
     Average,

@@ -20,3 +20,7 @@ Cargo.lock
 
 # Notes for future optimizations, FIXMEs, etc.
 notes.txt
+
+# Serialized model
+rcn.bin
+rcn.json

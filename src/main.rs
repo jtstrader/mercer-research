@@ -3,6 +3,7 @@ use mercer_research::{
     rcn::{RCNLayer, RCN},
     utils::kernel::{Padding, Pooling},
 };
+use std::fs;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -40,28 +41,39 @@ struct Args {
     epochs: usize,
 }
 
-fn main() {
+fn main() -> bincode::Result<()> {
+    // Load arguments and stored model, if possible.
     let args = Args::parse();
+    let serialized_model = fs::read("./rcn.bin").ok();
 
-    let mut model = RCN::new(
-        args.num_classes,
-        &[
-            RCNLayer::Convolve2D(Padding::Same),
-            RCNLayer::Pool2D(Pooling::Max),
-            RCNLayer::Convolve2D(Padding::Same),
-            RCNLayer::Pool2D(Pooling::Max),
-        ],
-        &[30],
-        &args.training_path,
-        &args.testing_path,
-    );
-    model
-        .train(
-            args.batches,
-            args.epochs,
-            args.learning_rate,
-            args.training_class_size,
-            args.testing_class_size,
-        )
-        .unwrap();
+    let mut model: RCN = match serialized_model {
+        Some(ref data) => bincode::deserialize(&data[..])?,
+        None => RCN::new(
+            args.num_classes,
+            vec![
+                RCNLayer::Convolve2D(Padding::Same),
+                RCNLayer::Pool2D(Pooling::Max),
+                RCNLayer::Convolve2D(Padding::Same),
+                RCNLayer::Pool2D(Pooling::Max),
+            ],
+            vec![30],
+            &args.training_path,
+            &args.testing_path,
+        ),
+    };
+
+    match model.train(
+        args.batches,
+        args.epochs,
+        args.learning_rate,
+        args.training_class_size,
+        args.testing_class_size,
+    ) {
+        Ok(()) => {}
+        Err(e) => eprintln!("{}", e),
+    };
+
+    // Serialize data to file
+    fs::write("./rcn.bin", bincode::serialize(&model)?)?;
+    Ok(())
 }

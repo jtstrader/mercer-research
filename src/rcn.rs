@@ -1,27 +1,35 @@
+use crate::utils::kernel::{Convolve2D, Padding, Pool2D, Pooling, SeparableOperator};
 use image::{io::Reader as ImageReader, ImageError};
 use nalgebra::{DMatrix, DVector};
 use rand::seq::SliceRandom;
 use rand::Rng;
 use rand_distr::StandardNormal;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::f64::consts::E;
 use std::sync::{Arc, Mutex};
 use std::{fs, path::PathBuf};
 
-use crate::utils::kernel::{Convolve2D, Padding, Pool2D, Pooling, SeparableOperator};
-
+#[derive(Serialize, Deserialize)]
 /// Rust Convolutional Neural Network (RCN)
 pub struct RCN<'a> {
     classes: usize,
-    convpool_cfg: &'a [RCNLayer],
-    feedforward_cfg: &'a [usize],
-    layer_weights: Vec<DMatrix<f64>>,
-    layer_bias: Vec<DVector<f64>>,
+    convpool_cfg: Vec<RCNLayer>,
+    feedforward_cfg: Vec<usize>,
+    layer_weights: Vec<Weights>,
+    layer_bias: Vec<Bias>,
 
     training_path: &'a str,
     testing_path: &'a str,
 }
 
+/// Weights tuple struct wrapped for serializing/deserializing.
+pub struct Weights(pub DMatrix<f64>);
+
+/// Biases tuple struct wrapped for serializing/deserializing.
+pub struct Bias(pub DVector<f64>);
+
+#[derive(Serialize, Deserialize)]
 /// Characteristics of a layer
 pub enum RCNLayer {
     Convolve2D(Padding),
@@ -48,8 +56,8 @@ impl<'a> RCN<'a> {
     ///
     pub fn new(
         classes: usize,
-        convpool_cfg: &'a [RCNLayer],
-        feedforward_cfg: &'a [usize],
+        convpool_cfg: Vec<RCNLayer>,
+        feedforward_cfg: Vec<usize>,
         training_path: &'a str,
         testing_path: &'a str,
     ) -> Self {
@@ -71,7 +79,12 @@ impl<'a> RCN<'a> {
     ///
     fn classify(&self, x: &DVector<f64>) -> DVector<f64> {
         let mut a: DVector<f64> = x.clone();
-        for (b, w) in self.layer_bias.iter().zip(self.layer_weights.iter()) {
+        for (b, w) in self
+            .layer_bias
+            .iter()
+            .zip(self.layer_weights.iter())
+            .map(|(b, w)| (&b.0, &w.0))
+        {
             a = sigmoid(&(w * a + b));
         }
         a
@@ -97,7 +110,10 @@ impl<'a> RCN<'a> {
             self.load_data(self.training_path, training_class_size_limit);
         let testing_set: Vec<InputSet> =
             self.load_data(self.testing_path, testing_class_size_limit);
-        self.load_weights_and_bias(training_set[0].0.len());
+
+        if self.layer_weights.is_empty() || self.layer_bias.is_empty() {
+            self.load_weights_and_bias(training_set[0].0.len());
+        }
 
         // Highest level loop is the epoch loop, since all inner code will be working through the entire dataset
         for e in 0..epochs {
@@ -135,13 +151,13 @@ impl<'a> RCN<'a> {
         let del_w: Arc<Mutex<Vec<DMatrix<f64>>>> = Arc::new(Mutex::new(
             self.layer_weights
                 .iter()
-                .map(|w| DMatrix::zeros(w.shape().0, w.shape().1))
+                .map(|w| DMatrix::zeros(w.0.shape().0, w.0.shape().1))
                 .collect(),
         ));
         let del_b: Arc<Mutex<Vec<DVector<f64>>>> = Arc::new(Mutex::new(
             self.layer_bias
                 .iter()
-                .map(|b| DVector::zeros(b.nrows()))
+                .map(|b| DVector::zeros(b.0.nrows()))
                 .collect(),
         ));
 
@@ -169,14 +185,14 @@ impl<'a> RCN<'a> {
             .layer_weights
             .iter()
             .zip(del_w.iter())
-            .map(|(lw, w)| lw - (eta / batch.len() as f64) * w)
+            .map(|(lw, w)| Weights(&lw.0 - (eta / batch.len() as f64) * w))
             .collect();
 
         self.layer_bias = self
             .layer_bias
             .iter()
             .zip(del_b.iter())
-            .map(|(lb, b)| lb - (eta / batch.len() as f64) * b)
+            .map(|(lb, b)| Bias(&lb.0 - (eta / batch.len() as f64) * b))
             .collect();
     }
 
@@ -221,12 +237,12 @@ impl<'a> RCN<'a> {
         let mut del_w: Vec<DMatrix<f64>> = self
             .layer_weights
             .iter()
-            .map(|w| DMatrix::zeros(w.shape().0, w.shape().1))
+            .map(|w| DMatrix::zeros(w.0.shape().0, w.0.shape().1))
             .collect();
         let mut del_b: Vec<DVector<f64>> = self
             .layer_bias
             .iter()
-            .map(|b| DVector::zeros(b.nrows()))
+            .map(|b| DVector::zeros(b.0.nrows()))
             .collect();
 
         // List of activations and weighted inputs (zs)
@@ -234,7 +250,12 @@ impl<'a> RCN<'a> {
         let mut activations: Vec<DVector<f64>> = vec![x.clone()];
         let mut zs: Vec<DVector<f64>> = Vec::new();
 
-        for (b, w) in self.layer_bias.iter().zip(self.layer_weights.iter()) {
+        for (b, w) in self
+            .layer_bias
+            .iter()
+            .zip(self.layer_weights.iter())
+            .map(|(b, w)| (&b.0, &w.0))
+        {
             let z = w * curr_activation + b;
             zs.push(z.clone());
             curr_activation = sigmoid(&z);
@@ -255,7 +276,8 @@ impl<'a> RCN<'a> {
 
         for l in 1..self.feedforward_cfg.len() + 1 {
             let sp = sigmoid_prime(&zs[zs_end - l]);
-            delta = (self.layer_weights[weight_end - l + 1].transpose() * delta).component_mul(&sp);
+            delta =
+                (self.layer_weights[weight_end - l + 1].0.transpose() * delta).component_mul(&sp);
             del_b[db_end - l] = delta.clone();
             del_w[dw_end - l] = &delta * activations[activ_end - l - 1].transpose();
         }
@@ -265,9 +287,9 @@ impl<'a> RCN<'a> {
 
     fn flatten_feature_set(&self, m: &DMatrix<f64>) -> DVector<f64> {
         let mut feature_set: Vec<DMatrix<f64>> = Vec::new();
-        for layer in self.convpool_cfg {
+        for layer in &self.convpool_cfg {
             match layer {
-                RCNLayer::Convolve2D(p) => {
+                RCNLayer::Convolve2D(ref p) => {
                     // build feature set from current matrix if feature_set is not already populated
                     if !feature_set.is_empty() {
                         // preserve current length and iterate over those only
@@ -288,7 +310,7 @@ impl<'a> RCN<'a> {
                         feature_set.extend(SEP_OPS.map(|op| m.convolve_2d_separated(op, p)));
                     }
                 }
-                RCNLayer::Pool2D(p) => {
+                RCNLayer::Pool2D(ref p) => {
                     for feature in &mut feature_set {
                         *feature = feature.pool_2d(&Padding::Same, p);
                     }
@@ -373,7 +395,7 @@ impl<'a> RCN<'a> {
         self.layer_bias = Vec::with_capacity(self.feedforward_cfg.len() + 1);
 
         let (mut c, mut p) = (0, 0);
-        for layer in self.convpool_cfg {
+        for layer in &self.convpool_cfg {
             match layer {
                 RCNLayer::Convolve2D(_) => {
                     c += 1;
@@ -389,8 +411,8 @@ impl<'a> RCN<'a> {
         let mut a = usize::pow(4, c) / usize::pow(2, p) * l;
         let mut b = self.feedforward_cfg[0];
         for i in 0..self.layer_weights.capacity() {
-            self.layer_weights.push(get_weight_matrix(a, b));
-            self.layer_bias.push(get_bias_vector(b));
+            self.layer_weights.push(Weights(get_weight_matrix(a, b)));
+            self.layer_bias.push(Bias(get_bias_vector(b)));
             (a, b) = (
                 b,
                 if i + 1 < self.feedforward_cfg.len() {
@@ -495,13 +517,13 @@ mod tests {
     fn rcn_init() {
         let model = RCN::new(
             10,
-            &[
+            vec![
                 RCNLayer::Convolve2D(Padding::Same),
                 RCNLayer::Pool2D(Pooling::Max),
                 RCNLayer::Convolve2D(Padding::Same),
                 RCNLayer::Pool2D(Pooling::Max),
             ],
-            &[10, 10],
+            vec![10, 10],
             "images/mnist_png/training",
             "images/mnist_png/testing",
         );
@@ -513,13 +535,13 @@ mod tests {
     fn training() {
         let mut model = RCN::new(
             10,
-            &[
+            vec![
                 RCNLayer::Convolve2D(Padding::Same),
                 RCNLayer::Pool2D(Pooling::Max),
                 RCNLayer::Convolve2D(Padding::Same),
                 RCNLayer::Pool2D(Pooling::Max),
             ],
-            &[10, 10],
+            vec![10, 10],
             "images/mnist_png/training",
             "images/mnist_png/testing",
         );
