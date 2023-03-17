@@ -99,6 +99,8 @@ impl<'de> Deserialize<'de> for Weights {
     }
 }
 
+/// Treat Bias vectors as sequences that can be collected into a Vec<f64> and later converted into
+/// a DVector<f64>.
 impl Serialize for Bias {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
