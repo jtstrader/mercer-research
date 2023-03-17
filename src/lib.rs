@@ -9,7 +9,7 @@ use nalgebra::DMatrix;
 
 /// Log information of the current image.
 pub fn __log_image_info(path: &str, image: &DynamicImage) {
-    println!("Image Path: {}", path);
+    println!("Image Path: {path}");
     println!("Dimensions: {:?}", image.dimensions());
     println!("Pixel Count: {}", image.pixels().count());
     println!("Byte Count: {}", image.as_bytes().len());

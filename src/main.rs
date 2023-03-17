@@ -70,7 +70,7 @@ fn main() -> bincode::Result<()> {
         args.testing_class_size,
     ) {
         Ok(()) => {}
-        Err(e) => eprintln!("{}", e),
+        Err(e) => eprintln!("{e}"),
     };
 
     // Serialize data to file

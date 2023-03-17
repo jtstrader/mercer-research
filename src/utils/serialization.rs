@@ -93,7 +93,7 @@ impl<'de> Deserialize<'de> for Weights {
             }
         }
 
-        const FIELDS: &'static [&'static str] = &["dims", "data"];
+        const FIELDS: &[&str] = &["dims", "data"];
         let w = deserializer.deserialize_struct("Weights", FIELDS, SerializedWeightsVisitor)?;
         Ok(Weights(DMatrix::from_vec(w.dims.0, w.dims.1, w.data)))
     }

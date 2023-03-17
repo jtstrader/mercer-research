@@ -124,13 +124,13 @@ where
             || kernel_shape.0 > target_shape.0
             || kernel_shape.1 > target_shape.1
         {
-            panic!("convolve_2d expects 'self.shape() >= kernel_shape() > 0', received {:?} and {:?} respectively.", target_shape, kernel_shape);
+            panic!("convolve_2d expects 'self.shape() >= kernel_shape() > 0', received {target_shape:?} and {kernel_shape:?} respectively.");
         }
 
         // Only allow same padding if both kernel dimensions are odd
         if kernel_shape.0 % 2 == 0 || kernel_shape.1 % 2 == 0 {
             if let Padding::Same = padding {
-                panic!("convolve_2d expects kernel dimensions to be odd when padding mode set to 'SAME', got {:?}", kernel_shape);
+                panic!("convolve_2d expects kernel dimensions to be odd when padding mode set to 'SAME', got {kernel_shape:?}");
             }
         }
 
@@ -501,9 +501,9 @@ mod tests {
     /// set the pixel value to 0 (black). Otherwise, leave the pixel value as is.
     fn normalize(i: f64) -> u8 {
         if i > 255_f64 {
-            255 as u8
+            255_u8
         } else if i < 0_f64 {
-            0 as u8
+            0_u8
         } else {
             i as u8
         }

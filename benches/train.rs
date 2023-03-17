@@ -9,13 +9,13 @@ pub fn train_model(c: &mut Criterion) {
     c.bench_function("Train w/ 10 Epochs, 10 in Batch, 100 CSL", |b| {
         let mut model = RCN::new(
             10,
-            &[
+            vec![
                 RCNLayer::Convolve2D(Padding::Same),
                 RCNLayer::Pool2D(Pooling::Max),
                 RCNLayer::Convolve2D(Padding::Same),
                 RCNLayer::Pool2D(Pooling::Max),
             ],
-            &[30],
+            vec![30],
             "images/mnist_png/training",
             "images/mnist_png/testing",
         );
