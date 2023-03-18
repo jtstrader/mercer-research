@@ -1,5 +1,5 @@
 use clap::Parser;
-use mercer_research::{
+use rcn::{
     rcn::{RCNLayer, RCN},
     utils::kernel::{Padding, Pooling},
 };

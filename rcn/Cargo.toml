@@ -1,5 +1,5 @@
 [package]
-name = "mercer-research"
+name = "rcn"
 authors = ["Jacob Strader <11006561@live.mercer.edu>"]
 description = "A convolutional neural network built in Rust"
 version = "0.1.0"

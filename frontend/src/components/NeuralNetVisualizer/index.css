@@ -1,0 +1,21 @@
+.disconnected-node {
+  stroke: gray;
+  opacity: 30%;
+}
+
+.connected-node {
+  stroke: #f76800; /* Mercer Orange */
+}
+
+.animate-node-draw {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: dash 2s linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
