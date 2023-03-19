@@ -9,13 +9,15 @@ function App() {
   const waitTime = 5000; // Amount of time to wait getting a new response
 
   useEffect(() => {
-    (async () => {
-      return new Promise<void>(async (resolve) => {
-        setRes(await getRCNResult());
-        setTimeout(resolve, waitTime);
-      });
-    })();
-  }, [res]);
+    const resInterval = setInterval(
+      async () => setRes(await getRCNResult()),
+      waitTime
+    );
+
+    return () => {
+      clearInterval(resInterval);
+    };
+  }, []);
 
   return (
     <>
@@ -25,8 +27,13 @@ function App() {
 
       <div
         id="main-display"
-        className="min-h-screen w-screen justify-center flex p-5"
+        className="min-h-screen w-screen flex columns-2 gap-x-32 justify-center items-center p-5"
       >
+        <img
+          className={"rcn-image"}
+          src={`data:image/png;base64,${res?.img}`}
+          alt={""}
+        />
         <NeuralNetVisualizer selected={res?.output} />
       </div>
     </>

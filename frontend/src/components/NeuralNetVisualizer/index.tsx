@@ -11,11 +11,13 @@ export interface NeuralNetVisualizerProps {
 export function NeuralNetVisualizer(props: NeuralNetVisualizerProps) {
   const [_, setPropState] = useState<NeuralNetVisualizerProps>(props);
   const animating = useRef<boolean>(true);
+  const prev = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (animating) {
       setTimeout(() => {
         animating.current = false;
+        prev.current = props.selected;
       }, 2000);
     }
   });
@@ -33,17 +35,23 @@ export function NeuralNetVisualizer(props: NeuralNetVisualizerProps) {
   const x = radius + strokeWidth;
   const y = radius + strokeWidth;
 
+  // Offset x and y values for the left and right sides
   const xs = (x: number) => x + radius * xShiftValue;
   const ys = (y: number, i: number) => y + radius * yShiftValue * i;
 
-  // Line setup
-  const lineWidth = 2;
+  // Transform left X and right X (XL, XR) for the drawn connections
+  const transformXL = (x: number): number => x + radius + strokeWidth;
+  const transformXR = (x: number): number => x - radius - strokeWidth;
 
-  // Determines the distance between nodes on the x and y axes.
+  // Line setup
+  const selectedLineWidth = 2;
+  const deselectedLineWidth = selectedLineWidth + 1;
+
+  // Determines the distance between nodes on the x and y axes
   const xShiftValue = 15;
   const yShiftValue = 3;
 
-  // For viewing truncate 6 nodes on the left so the lines can be seen easier.
+  // For viewing truncate 6 nodes on the left so the lines can be seen easier
   const leftLayerTrunc = 6;
   const rightLayerTrunc = 0;
 
@@ -52,7 +60,7 @@ export function NeuralNetVisualizer(props: NeuralNetVisualizerProps) {
    */
   const leftNodes = (trunc: number = 0): JSX.Element[] => {
     let l: JSX.Element[] = [];
-    trunc /= 2;
+    trunc = Math.floor(trunc / 2);
     for (let i = trunc; i < nodeCount - trunc; i++) {
       l.push(
         <circle
@@ -91,50 +99,82 @@ export function NeuralNetVisualizer(props: NeuralNetVisualizerProps) {
   /**
    * Generate connections for the neural network graph.
    */
-  const lines = (trunc: number = 0): JSX.Element[] => {
-    // xl => xl + radius * 2
-    // xr => xr - radius * 2
-    // y  => y + radius
-    const transformXL = (x: number): number => x + radius + strokeWidth;
-    const transformXR = (x: number): number => x - radius - strokeWidth;
-
+  const grayLines = (trunc: number = 0): JSX.Element[] => {
     let l: JSX.Element[] = [];
-    trunc /= 2;
-
-    const genLine = (
-      i: number,
-      j: number,
-      className = "disconnected-node"
-    ): JSX.Element => {
-      return (
-        <line
-          className={className}
-          x1={transformXL(x)}
-          x2={transformXR(xs(x))}
-          y1={ys(y, i)}
-          y2={ys(y, j)}
-          strokeWidth={lineWidth}
-        />
-      );
-    };
+    trunc = Math.floor(trunc / 2);
 
     // Draw `nodeCount` lines from each node to the output node.
     for (let i = trunc; i < nodeCount - trunc; i++) {
       for (let j = 0; j < nodeCount; j++) {
-        l.push(genLine(i, j));
+        l.push(
+          <line
+            className="base-connection"
+            x1={transformXL(x)}
+            x2={transformXR(xs(x))}
+            y1={ys(y, i)}
+            y2={ys(y, j)}
+            strokeWidth={deselectedLineWidth}
+          />
+        );
       }
     }
 
-    // Explictly declare animation, then wrap around a static drawing
-    // so the animation can be cancelled safely without a flickering effect.
-    if (props.selected && animating.current) {
+    return l;
+  };
+
+  /**
+   * Draw the selected line.
+   */
+  const selectedLine = (trunc: number): JSX.Element[] => {
+    let l: JSX.Element[] = [];
+    trunc = Math.floor(trunc / 2);
+
+    if (props.selected !== undefined && animating.current) {
+      for (let i = trunc; i < nodeCount - trunc; i++) {
+        console.log("working...");
+        l.push(
+          <line
+            className="selected-connection animate-node-draw"
+            x1={transformXL(x)}
+            x2={transformXR(xs(x))}
+            y1={ys(y, i)}
+            y2={ys(y, props.selected)}
+            strokeWidth={selectedLineWidth}
+          />
+        );
+      }
+    }
+    return l;
+  };
+
+  /**
+   * Clear a previously selected line.
+   */
+  const clearLine = (trunc: number): JSX.Element[] => {
+    let l: JSX.Element[] = [];
+    trunc = Math.floor(trunc / 2);
+
+    if (prev.current !== undefined && animating.current) {
       for (let i = trunc; i < nodeCount - trunc; i++) {
         l.push(
-          genLine(
-            i,
-            props.selected,
-            `connected-node ${animating ? "animate-node-draw" : ""}`
-          )
+          <line
+            className="selected-connection"
+            x1={transformXL(x)}
+            x2={transformXR(xs(x))}
+            y1={ys(y, i)}
+            y2={ys(y, prev.current)}
+            strokeWidth={selectedLineWidth}
+          />
+        );
+        l.push(
+          <line
+            className="deselected-connection animate-node-clear"
+            x1={transformXL(x)}
+            x2={transformXR(xs(x))}
+            y1={ys(y, i)}
+            y2={ys(y, prev.current)}
+            strokeWidth={deselectedLineWidth}
+          />
         );
       }
     }
@@ -146,6 +186,7 @@ export function NeuralNetVisualizer(props: NeuralNetVisualizerProps) {
    */
   const text = (): JSX.Element[] => {
     let l: JSX.Element[] = [];
+
     for (let i = 0; i < nodeCount; i++) {
       l.push(
         <text
@@ -162,10 +203,12 @@ export function NeuralNetVisualizer(props: NeuralNetVisualizerProps) {
   };
 
   return (
-    <svg width={xs(x) + radius + strokeWidth}>
+    <svg width={xs(x) + radius + strokeWidth} className="min-h-screen">
       {leftNodes(leftLayerTrunc) /* Truncate 6 nodes on the left */}
       {rightNodes(rightLayerTrunc) /* Truncate nothing on the output layer */}
-      {lines(leftLayerTrunc) /* Truncate 6 nodes on the left */}
+      {grayLines(leftLayerTrunc) /* Base gray lines for the graph */}
+      {clearLine(leftLayerTrunc) /* Clear the previous selection */}
+      {selectedLine(leftLayerTrunc) /* Color the selected line orange */}
       {text()}
     </svg>
   );

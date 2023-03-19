@@ -1,16 +1,28 @@
-.disconnected-node {
-  stroke: gray;
-  opacity: 30%;
+.base-connection {
+  stroke: #696969;
 }
 
-.connected-node {
+/* Connection that will be animated in a selection */
+.selected-connection {
   stroke: #f76800; /* Mercer Orange */
+}
+
+/* Connection that was selected but now it not, and will be animated back to a gray line */
+.deselected-connection {
+  stroke: #696969;
 }
 
 .animate-node-draw {
   stroke-dasharray: 1000;
   stroke-dashoffset: 1000;
   animation: dash 2s linear;
+  animation-fill-mode: forwards;
+}
+
+.animate-node-clear {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: dash 1s linear;
   animation-fill-mode: forwards;
 }
 
