@@ -18,6 +18,7 @@ pub struct RCN<'a> {
     feedforward_cfg: Vec<usize>,
     layer_weights: Vec<Weights>,
     layer_bias: Vec<Bias>,
+    scale_set: (f64, f64),
 
     training_path: &'a str,
     testing_path: &'a str,
@@ -67,17 +68,41 @@ impl<'a> RCN<'a> {
             feedforward_cfg,
             layer_weights: Vec::new(),
             layer_bias: Vec::new(),
+            scale_set: (1_f64, 1_f64),
             training_path,
             testing_path,
         }
     }
 
-    /// Classify a given input
+    /// Classify a given image and return the respective class index.
+    ///
+    /// # Arguments
+    /// * `img_path` - A path to an image to classify
+    ///
+    pub fn classify(&self, img_path: &str) -> Result<usize, Box<dyn std::error::Error>> {
+        let img = ImageReader::open(img_path)?.decode()?.grayscale();
+        let mut input_vector = self.flatten_feature_set(&crate::get_pixel_matrix(&img)?);
+
+        for r in 0..input_vector.nrows() {
+            let d = (input_vector[r] - self.scale_set.0) / self.scale_set.1;
+            input_vector[r] = if d >= 0_f64 { d } else { 0_f64 };
+        }
+
+        let result_vector = self.classify_test(&input_vector);
+        Ok(result_vector
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map(|(i, _)| i)
+            .expect("network cannot have 0 classes"))
+    }
+
+    /// Classify a given input for testing the model
     ///
     /// # Arguments
     /// * `x` - The input vector
     ///
-    fn classify(&self, x: &DVector<f64>) -> DVector<f64> {
+    fn classify_test(&self, x: &DVector<f64>) -> DVector<f64> {
         let mut a: DVector<f64> = x.clone();
         for (b, w) in self
             .layer_bias
@@ -126,7 +151,7 @@ impl<'a> RCN<'a> {
             // Run through test data to show network change
             let mut accept = 0;
             for (test, expectation) in &testing_set {
-                let res = self.classify(test);
+                let res = self.classify_test(test);
                 let res = res.map(|v| if v == res.max() { 1_f64 } else { 0_f64 });
                 accept += i32::from(&res == expectation);
             }
@@ -201,7 +226,7 @@ impl<'a> RCN<'a> {
     /// # Arguments
     /// * `iv` - The input vector to parse through
     ///
-    fn get_scales(&self, iv: &Vec<InputSet>) -> (f64, f64) {
+    fn gen_scales(&mut self, iv: &Vec<InputSet>) {
         let mut mean = 0_f64;
         let mut sd = 0_f64;
         let n = iv[0].0.len() as f64 * iv.len() as f64;
@@ -220,7 +245,8 @@ impl<'a> RCN<'a> {
         }
         sd = f64::sqrt(sd / n);
 
-        (mean, sd)
+        self.scale_set.0 = mean;
+        self.scale_set.1 = sd;
     }
 
     /// Return gradient tensors for del_w and del_b
@@ -335,11 +361,14 @@ impl<'a> RCN<'a> {
     /// * `path` - The path to the data set
     /// * `class_size_limit` - The absolute limit of data that should be populated per class
     ///
-    fn load_data(&self, path: &str, class_size_limit: usize) -> Vec<InputSet> {
-        let classes: Vec<PathBuf> = fs::read_dir(path)
+    fn load_data(&mut self, path: &str, class_size_limit: usize) -> Vec<InputSet> {
+        let mut classes: Vec<PathBuf> = fs::read_dir(path)
             .unwrap()
             .map(|f| f.unwrap().path())
             .collect();
+
+        // Sort classes in numerical order
+        classes.sort();
 
         let mut dset: Vec<InputSet> = Vec::new();
         for (i, class) in classes.iter().enumerate() {
@@ -371,10 +400,10 @@ impl<'a> RCN<'a> {
             }
         }
 
-        let (mean, sd) = self.get_scales(&dset);
+        self.gen_scales(&dset);
         for v in &mut dset {
             for r in 0..v.0.nrows() {
-                let d = (v.0[r] - mean) / sd;
+                let d = (v.0[r] - self.scale_set.0) / self.scale_set.1;
                 v.0[r] = if d >= 0_f64 { d } else { 0_f64 };
             }
         }
