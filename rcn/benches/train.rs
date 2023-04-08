@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use mercer_research::{
+use rcn::{
     rcn::RCNLayer,
     rcn::RCN,
     utils::kernel::{Padding, Pooling},

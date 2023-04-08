@@ -2,11 +2,9 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use image::io::Reader as ImageReader;
-use mercer_research::get_pixel_matrix;
-use mercer_research::utils::kernel::{
-    Convolve2D, Padding, Pool2D, Pooling, SeparableOperator, __TOP_SOBEL,
-};
 use nalgebra::DMatrix;
+use rcn::get_pixel_matrix;
+use rcn::utils::kernel::{Convolve2D, Padding, Pool2D, Pooling, SeparableOperator, __TOP_SOBEL};
 
 fn get_image_data() -> DMatrix<f64> {
     get_pixel_matrix(
