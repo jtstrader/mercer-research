@@ -172,6 +172,7 @@ impl<'a> RCN<'a> {
     /// * `batch` - The input batch which contains an input vector and the
     /// * `eta` - The learning rate
     ///
+    #[inline]
     fn train_batch(&mut self, batch: &[InputSet], eta: f64) {
         let del_w: Arc<Mutex<Vec<DMatrix<f64>>>> = Arc::new(Mutex::new(
             self.layer_weights
@@ -255,6 +256,7 @@ impl<'a> RCN<'a> {
     /// * `x` - The input vector
     /// * `y` - The expected output
     ///
+    #[inline]
     fn backprop(
         &self,
         x: &DVector<f64>,
@@ -311,6 +313,7 @@ impl<'a> RCN<'a> {
         (del_b, del_w)
     }
 
+    #[inline]
     fn flatten_feature_set(&self, m: &DMatrix<f64>) -> DVector<f64> {
         let mut feature_set: Vec<DMatrix<f64>> = Vec::new();
         for layer in &self.convpool_cfg {
