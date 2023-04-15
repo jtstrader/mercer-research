@@ -20,8 +20,13 @@ pub struct RCN<'a> {
     layer_bias: Vec<Bias>,
     scale_set: (f64, f64),
 
+    #[serde(skip_serializing, skip_deserializing)]
     training_path: &'a str,
+
+    #[serde(skip_serializing, skip_deserializing)]
     testing_path: &'a str,
+
+    data_fmt: DataFormat,
 }
 
 /// Weights tuple struct wrapped for serializing/deserializing.
@@ -37,6 +42,12 @@ pub enum RCNLayer {
     Pool2D(Pooling),
 }
 
+#[derive(Serialize, Deserialize)]
+pub enum DataFormat {
+    DirWalk,
+    Csv,
+}
+
 /// List of operators that can be iterated through for convolutions
 const SEP_OPS: [SeparableOperator; 4] = [
     SeparableOperator::Top,
@@ -47,6 +58,9 @@ const SEP_OPS: [SeparableOperator; 4] = [
 
 /// The input data for the feedforward portion of the network and the expected output
 type InputSet = (DVector<f64>, DVector<f64>);
+
+/// Unformated input data.
+type IntermediateInputSet = (DMatrix<f64>, DVector<f64>);
 
 impl<'a> RCN<'a> {
     /// Create new RCN instance
@@ -61,6 +75,7 @@ impl<'a> RCN<'a> {
         feedforward_cfg: Vec<usize>,
         training_path: &'a str,
         testing_path: &'a str,
+        data_fmt: DataFormat,
     ) -> Self {
         RCN {
             classes,
@@ -71,6 +86,7 @@ impl<'a> RCN<'a> {
             scale_set: (1_f64, 1_f64),
             training_path,
             testing_path,
+            data_fmt,
         }
     }
 
@@ -130,11 +146,11 @@ impl<'a> RCN<'a> {
         eta: f64,
         training_class_size_limit: usize,
         testing_class_size_limit: usize,
-    ) -> Result<(), ImageError> {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut training_set: Vec<InputSet> =
-            self.load_data(self.training_path, training_class_size_limit);
+            self.load_data(self.training_path, training_class_size_limit)?;
         let testing_set: Vec<InputSet> =
-            self.load_data(self.testing_path, testing_class_size_limit);
+            self.load_data(self.testing_path, testing_class_size_limit)?;
 
         if self.layer_weights.is_empty() || self.layer_bias.is_empty() {
             self.load_weights_and_bias(training_set[0].0.len());
@@ -364,44 +380,20 @@ impl<'a> RCN<'a> {
     /// * `path` - The path to the data set
     /// * `class_size_limit` - The absolute limit of data that should be populated per class
     ///
-    fn load_data(&mut self, path: &str, class_size_limit: usize) -> Vec<InputSet> {
-        let mut classes: Vec<PathBuf> = fs::read_dir(path)
-            .unwrap()
-            .map(|f| f.unwrap().path())
+    fn load_data(
+        &mut self,
+        path: &str,
+        class_size_limit: usize,
+    ) -> Result<Vec<InputSet>, Box<dyn std::error::Error>> {
+        let intermediate_dset = match self.data_fmt {
+            DataFormat::DirWalk => from_dir_walk(path, class_size_limit)?,
+            DataFormat::Csv => from_csv(path, self.classes)?,
+        };
+
+        let mut dset: Vec<InputSet> = intermediate_dset
+            .into_iter()
+            .map(|(input, output)| (self.flatten_feature_set(&input), output))
             .collect();
-
-        // Sort classes in numerical order
-        classes.sort();
-
-        let mut dset: Vec<InputSet> = Vec::new();
-        for (i, class) in classes.iter().enumerate() {
-            let mut paths: Vec<PathBuf> = fs::read_dir(class)
-                .unwrap()
-                .map(|f| f.unwrap().path())
-                .collect();
-
-            if class_size_limit > paths.len() {
-                panic!(
-                    "provided class_size_limit for {} too large! expected {} <= {}",
-                    path,
-                    class_size_limit,
-                    paths.len()
-                );
-            }
-
-            for _ in 0..class_size_limit {
-                let idx = rand::thread_rng().gen_range(0..paths.len());
-                let img = ImageReader::open(paths.remove(idx))
-                    .unwrap()
-                    .decode()
-                    .unwrap()
-                    .grayscale();
-                dset.push((
-                    self.flatten_feature_set(&crate::get_pixel_matrix(&img).unwrap()),
-                    get_expected_vec(i, classes.len()),
-                ));
-            }
-        }
 
         self.gen_scales(&dset);
         for v in &mut dset {
@@ -411,7 +403,7 @@ impl<'a> RCN<'a> {
             }
         }
 
-        dset
+        Ok(dset)
     }
 
     /// *Internal Function*
@@ -522,6 +514,68 @@ fn get_bias_vector(neurons: usize) -> DVector<f64> {
     )
 }
 
+/// Read data from a directory walk and return a relevant input set from it.
+fn from_dir_walk(
+    path: &str,
+    class_size_limit: usize,
+) -> Result<Vec<IntermediateInputSet>, ImageError> {
+    let mut classes: Vec<_> = fs::read_dir(path)?
+        .into_iter()
+        .filter_map(|entry| entry.ok())
+        .map(|e| e.path())
+        .collect();
+    classes.sort();
+
+    let mut dset: Vec<IntermediateInputSet> = Vec::new();
+    for (i, class) in classes.iter().enumerate() {
+        let mut paths: Vec<PathBuf> = fs::read_dir(class)
+            .unwrap()
+            .map(|f| f.unwrap().path())
+            .collect();
+
+        if class_size_limit > paths.len() {
+            panic!(
+                "provided class_size_limit for {} too large! expected {} <= {}",
+                path,
+                class_size_limit,
+                paths.len()
+            );
+        }
+
+        let exp_vec = get_expected_vec(i, classes.len());
+
+        for _ in 0..class_size_limit {
+            let idx = rand::thread_rng().gen_range(0..paths.len());
+            let img = ImageReader::open(paths.remove(idx))?.decode()?.grayscale();
+            dset.push((crate::get_pixel_matrix(&img).unwrap(), exp_vec.clone()));
+        }
+    }
+    Ok(dset)
+}
+
+pub fn from_csv(
+    path: &str,
+    classes: usize,
+) -> Result<Vec<IntermediateInputSet>, Box<dyn std::error::Error>> {
+    const WIDTH: usize = 28;
+    const HEIGHT: usize = 28;
+
+    let mut csv_rdr = csv::Reader::from_reader(fs::File::open(path)?);
+    let mut dset: Vec<IntermediateInputSet> = Vec::new();
+    for record_result in csv_rdr.records() {
+        let record = record_result?;
+        let mut ri = record.into_iter();
+        let class_idx: usize = ri.next().ok_or("empty record")?.parse()?;
+        let m: DMatrix<f64> = DMatrix::from_iterator(
+            WIDTH,
+            HEIGHT,
+            ri.map(|pixel| pixel.parse::<f64>().expect("valid pixel information")),
+        );
+        dset.push((m, get_expected_vec(class_idx, classes)));
+    }
+    Ok(dset)
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -558,6 +612,7 @@ mod tests {
             vec![10, 10],
             "images/mnist_png/training",
             "images/mnist_png/testing",
+            DataFormat::DirWalk,
         );
 
         assert_eq!(model.classes, 10);
@@ -576,6 +631,7 @@ mod tests {
             vec![10, 10],
             "images/mnist_png/training",
             "images/mnist_png/testing",
+            DataFormat::DirWalk,
         );
 
         model.train(10, 10, 3_f64, 50, 50).unwrap();
