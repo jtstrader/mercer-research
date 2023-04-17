@@ -20,10 +20,7 @@ pub struct RCN<'a> {
     layer_bias: Vec<Bias>,
     scale_set: (f64, f64),
 
-    #[serde(skip_serializing, skip_deserializing)]
     training_path: &'a str,
-
-    #[serde(skip_serializing, skip_deserializing)]
     testing_path: &'a str,
 
     data_fmt: DataFormat,

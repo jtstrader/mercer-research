@@ -18,6 +18,7 @@ pub fn train_model(c: &mut Criterion) {
             vec![30],
             "images/mnist_png/training",
             "images/mnist_png/testing",
+            rcn::rcn::DataFormat::DirWalk,
         );
         b.iter(|| model.train(10, 50, 3_f64, 500, 500).unwrap());
     });

@@ -57,7 +57,7 @@ fn main() -> bincode::Result<()> {
                 RCNLayer::Convolve2D(Padding::Same),
                 RCNLayer::Pool2D(Pooling::Max),
             ],
-            vec![20, 20],
+            vec![50],
             &args.training_path,
             &args.testing_path,
             data_fmt,
