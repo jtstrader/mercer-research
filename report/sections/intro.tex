@@ -1,0 +1,102 @@
+\begin{multicols}{2}
+\tableofcontents
+\section{The Rust Language}
+Rust is a systems programming languages lauded for its memory safety without the need of garbage collection and speeds
+comparable to C/C++. Its features give the language the ability to operate as a low-level language with high-level
+features, such as iterators and dynamic dispatch. One of the langauges' most important features is its \textit{zero cost
+abstractions}, where high-level concepts such as iterators are compiled down to optimized loops and if statements. This
+concept allows developers to write highly efficient code in a concise and declarative manner.
+
+The Rust community is working towards creating library support for features found in other high-level languages,
+particularly ML libraries. While the ecosystem for ML is not yet full developed, it is open for experimentation and
+testing~\cite{arewelearningyet}. Although the process is slow and primarily focuses on macOS and Linux systems, library
+development is picking up speed. As more companies and teams adopt Rust for their projects, the exposure of these
+projects will skyrocket, and developer resources will increase.
+
+\subsection{Zero Cost Abstractions}
+When writing code, it is easy to get distracted with "clean code." However, in modern languages, plenty of high-level
+abstractions are taken for granted and actually can cause serious performance hits. Take for instance JavaScript, a
+language that has risen into the limelight of the ML community.
+
+Common practices in these modern languages is to use a more declarative style. For instance, take a list of the numbers
+1 through 10, filter out numbers that are even, square each, and collect them into a list. A simple function like this
+is trivial in a language like JavaScript:
+
+\vspace{\baselineskip}
+\noindent
+\begin{minipage}[]{\linewidth}
+\begin{minted}[fontsize=\small, frame=lines, framesep=2mm]{js}
+const nums = [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+];
+const result = nums
+                .filter(x => x % 2 === 0)
+                .map(x => x * x);
+\end{minted}
+\end{minipage}
+\vspace{\baselineskip}
+
+This is extremely simple and faster to write than a solution in a language like C. However, this solution has a hidden
+problem that is seen when this code is compiled down. What the V8 engine (JavaScript's primary interpreter) does is take
+every declarative call that we interpret as "clean code" and actually allocate entire new arrays instead of modifying
+a temporary array in place.
+
+\vspace{\baselineskip}
+\noindent
+\begin{minipage}[]{\linewidth}
+\begin{minted}[fontsize=\small, frame=lines, framesep=2mm]{js}
+const nums = [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+];
+
+let a1 = [];
+for (var x of nums) {
+    if (x % 2 === 0) {
+        a1.push(x);
+    }
+}
+
+let a2 = [];
+for (var x of a1) {
+    a2.push(x * x);
+}
+
+const result = a2;
+\end{minted}
+\end{minipage}
+\vspace{\baselineskip}
+
+This issue plagues JavaScript developers, and forces them to use C-style for loops to create truly optimal code despite
+the supposed simplicity and elegance of JavaScript. However, issues like this are not a problem in Rust. Rust offers
+\textit{zero cost abstractions}, meaning that no matter the construct or abstraction you are using, it is guaranteed
+through compile-time optimizations to be compiled down to the most basic of for loops with no noticeable performance
+hits. The following Rust code accomplishes the same thing as the JavaScript code using ranges and iterators without
+sacrificing excess memory or performance.
+
+\vspace{\baselineskip}
+\noindent
+\begin{minipage}[]{\linewidth}
+\begin{minted}[fontsize=\small, frame=lines, framesep=2mm]{rs}
+let result = (1..=10)
+                .filter(|x| x % 2 == 0)
+                .map(|x| x * x)
+                .collect::<Vec<_>>();
+\end{minted}
+\end{minipage}
+\vspace{\baselineskip}
+
+At first glance these differences may seem insignificant. However, in terms of designing large scale applications that
+operate with minimum memory usage and maximum performance, these differences begin to add up. Zero cost abstractions
+allow the developer to work more efficiently without distancing themselves from performant code.
+
+\subsection{Concurrency}
+Rust's concurrency model provides guaranteed safety due to invariants enforced by the compiler. Exclusivity of mutable
+references, strict aliasing rules on boxed types, and other rules set by the compiler allow guaranteed safety in
+concurrent code at \textit{compile time}. This avoids common errors in concurrent/parallel computing, particular in
+the most advanced form in distributed computing.
+
+Rust's concurrency model allows clusters to interact freely with each other with a guarantee to avoid undefined
+behavior such as data races. With this in mind, parallelizing neural networks becomes easier and easier with a language
+smart enough to manage its own concurrency bugs at compile time so you do not have to.
+
+\end{multicols}

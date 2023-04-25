@@ -1,0 +1,73 @@
+\documentclass[a4paper,12pt]{article}
+% Package for math symbols
+\usepackage[T1]{fontenc}
+% For code
+\usepackage{minted}
+% APA citations
+\usepackage{apacite}
+% Package to make citations superscript with brackets
+\usepackage[super,square]{natbib}
+% Package to change margin size
+\usepackage{anysize}
+\marginsize{2cm}{2cm}{1cm}{2cm}
+% Package to make headers
+\usepackage{fancyhdr}
+\renewcommand{\headrulewidth}{0pt}
+% Package for highlights
+\usepackage{soul}
+% Colors for the references links
+\usepackage[dvipsnames]{xcolor}
+% Package to link references
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=CadetBlue,
+    filecolor=CadetBlue,
+    urlcolor=CadetBlue,
+}
+% Package for lorem ipsum
+\usepackage{lipsum}
+% Package for multicolumn
+\usepackage{multicol}
+\setlength\columnsep{18pt}
+% Sets abstract
+\renewenvironment{abstract}
+ {\par\noindent\textbf{\abstractname}\ \ignorespaces \\}
+ {\par\noindent\medskip}
+
+\begin{document}
+% Makes header
+\pagestyle{fancy}
+\thispagestyle{empty}
+\fancyhead[R]{\textit{Machine Learning in Rust}}
+\fancyhead[L]{}
+% Makes footnotes with an asterisk
+\renewcommand*{\thefootnote}{\fnsymbol{footnote}}
+\begin{center}
+\Large{\textbf{Machine Learning in Rust}}
+\vspace{0.4cm}
+\normalsize
+\\ Jacob Strader \\
+\vspace{0.1cm}
+\textit{Mercer University}
+\medskip
+\normalsize
+\end{center}
+{\color{gray}\hrule}
+\vspace{0.4cm}
+\begin{abstract}
+Machine learning is commonly done in modern data science languages like Python, R, and Julia. Their ease of use and
+simplicity makes them optimal for quickly developing neural networks, containerizing them, and serializing them for
+sustained use. However, these languages are not chosen for maximum performance. Most modern languages selected
+for machine learning (ML) are interpreted languages, typically relying on precompiled external libraries from lower lever
+programming languages for vectorized calculations. Instead of relying on high-level interpreted languages or low-level
+systems languages that risk undefined behavior, ML engineers can turn to modern, high-level systems programming
+languages such as Rust to create safe and efficient neural networks.
+\end{abstract}
+{\color{gray}\hrule}
+\medskip
+\input "./sections/intro.tex"
+\bibliographystyle{apacite}
+\bibliography{main.bib}
+\end{document}
