@@ -1,0 +1,57 @@
+\begin{multicols}{2}
+\section{RCN}
+As an example of Rust in the world of ML, I designed a very simple convolutional neural network which I dubbed RCN (Rust
+Convolutional Network). RCN is a simple classifier that accepts grayscale images with configurable hidden layers,
+convolutional layers, and pooling layers. It uses a sigmoid activation function and a quadratic cost function.
+
+\subsection{Implementation}
+The neural network is based off of a na\"ive implementation of a simple neural net in Python.~\cite{nnanddeeplearning}
+RCN supports convolutional layers, as well as max pooling. Average pooling is not planned to be implemented.\footnote{
+Pooling refers to taking extracted features and reducing them to highlight the most important features} Feature extraction
+currently uses Sobel filters for the top, bottom, left, and right lines. For optimal performance, the convolutions use
+micro kernels instead of the Sobel filters to reduce the number of calculations when convolving.\footnote{The simplest
+of micro kernels like those used in RCN are column or row vectors that, when multiplied together, generate 3x3 kernels}
+
+To extract these features, store them, and begin training, Rust's nalgebra crate is used.\footnote{Crates are packages
+in Rust. nalgebra is Rust's flagship linear algebra library} nalgebra does not currently come out of the box with image
+convolution, so I implemented the convolver myself.
+
+RCN currently supports running in parallel or serially depending on the load on the model. The rayon crate is used to offer quick and
+easy access to parallel training.\footnote{rayon is a data parallelism library}
+Currently, there is a small yet noticeable increase in performance with the addition of rayon. However, profiling will be
+done in the future to verify under large loads that the overhead of rayon does not cause performance hits. As well as potential
+sneaky performance hits, further research should be done on where it is most optimal to parallelize a network and when.
+Currently, the network's backpropagation algorithm is called in parallel, training batches asynchronously and merging the results
+together in the end.
+
+The neural network preserves hyperparameters in the RCN struct, which allows the model to be serialized and deserialized
+easily without needing any reloading. However, this limits the model to having \textit{immutable}
+hyperparameters. Changes in the future will be focused on allowing deserialization of the model into an intermediary struct
+that maintains layer weights and biases that can then be loaded into the RCN struct. The model's serialization and
+deserialization is handled by serde-rs and bincode.\footnote{bincode is a crate that works with serde to generate binary representations of data}
+
+\subsection{Benchmarking}
+The simplest form of RCN, running serially, was pitted against Dr. Nielson's basic Python implementation.
+
+\end{multicols}
+
+\begin{table}[!htb]
+    \caption{RCN Runtime vs. Python Network Runtime}
+    \begin{minipage}{\linewidth}
+      \centering
+        \begin{tabular}{|c|c|c|c|c|}
+            \hline
+            Epochs & Python (s) & Rust (s) & Difference (s) & Ratio \\
+            \hline\hline
+            1 & 1.6900 & 0.6360 & 1.0540 \\
+            5 & 6.0750 & 1.5180 & 4.5570 \\
+            10 & 11.5040 & 2.7250 & 8.7790 \\
+            20 & 22.3750 & 6.4900 & 15.8850 \\
+            30 & 26.2420 & 7.3660 & 18.8760 \\
+            50 & 56.1250 & 12.3520 & 43.7730 \\
+            75 & 70.0340 & 18.1720 & 51.8620 \\
+            100 & 110.3340 & 23.7180 & 86.6160 \\
+            \hline
+        \end{tabular}
+    \end{minipage}
+\end{table}

@@ -1,4 +1,6 @@
 \documentclass[a4paper,12pt]{article}
+% Caption package allows captioning elements without adding them like tables
+\usepackage{caption}
 % Package for math symbols
 \usepackage[T1]{fontenc}
 % For code
@@ -17,6 +19,8 @@
 \usepackage{soul}
 % Colors for the references links
 \usepackage[dvipsnames]{xcolor}
+% Package for urls
+\usepackage[hyphens]{url}
 % Package to link references
 \usepackage{hyperref}
 \hypersetup{
@@ -42,8 +46,6 @@
 \thispagestyle{empty}
 \fancyhead[R]{\textit{Machine Learning in Rust}}
 \fancyhead[L]{}
-% Makes footnotes with an asterisk
-\renewcommand*{\thefootnote}{\fnsymbol{footnote}}
 \begin{center}
 \Large{\textbf{Machine Learning in Rust}}
 \vspace{0.4cm}
@@ -68,6 +70,8 @@ languages such as Rust to create safe and efficient neural networks.
 {\color{gray}\hrule}
 \medskip
 \input "./sections/intro.tex"
+\input "./sections/ml.tex"
+\pagebreak
 \bibliographystyle{apacite}
 \bibliography{main.bib}
 \end{document}

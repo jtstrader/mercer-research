@@ -9,7 +9,7 @@ concept allows developers to write highly efficient code in a concise and declar
 
 The Rust community is working towards creating library support for features found in other high-level languages,
 particularly ML libraries. While the ecosystem for ML is not yet full developed, it is open for experimentation and
-testing~\cite{arewelearningyet}. Although the process is slow and primarily focuses on macOS and Linux systems, library
+testing.~\cite{arewelearningyet} Although the process is slow and primarily focuses on macOS and Linux systems, library
 development is picking up speed. As more companies and teams adopt Rust for their projects, the exposure of these
 projects will skyrocket, and developer resources will increase.
 
@@ -20,7 +20,7 @@ language that has risen into the limelight of the ML community.
 
 Common practices in these modern languages is to use a more declarative style. For instance, take a list of the numbers
 1 through 10, filter out numbers that are even, square each, and collect them into a list. A simple function like this
-is trivial in a language like JavaScript:
+is trivial in a language like JavaScript.
 
 \vspace{\baselineskip}
 \noindent
@@ -38,7 +38,7 @@ const result = nums
 
 This is extremely simple and faster to write than a solution in a language like C. However, this solution has a hidden
 problem that is seen when this code is compiled down. What the V8 engine (JavaScript's primary interpreter) does is take
-every declarative call that we interpret as "clean code" and actually allocate entire new arrays instead of modifying
+every declarative call that we interpret as "clean code" and actually allocates entire new arrays instead of modifying
 a temporary array in place.
 
 \vspace{\baselineskip}
@@ -85,18 +85,66 @@ let result = (1..=10)
 \end{minipage}
 \vspace{\baselineskip}
 
-At first glance these differences may seem insignificant. However, in terms of designing large scale applications that
-operate with minimum memory usage and maximum performance, these differences begin to add up. Zero cost abstractions
-allow the developer to work more efficiently without distancing themselves from performant code.
+This code, when compiled down, is nothing but basic for loops with a single vector. The code performs the same task
+but without the double allocation. This is how Rust attracts old and new developers: it runs efficiently on every
+type of machine from embedded systems to supercomputers while looking as modern and elegant as JavaScript.
+
+Rust's usage of iterators is not the only zero cost abstraction the language boasts. Metaprogramming that allows
+generation of generic functions, structs, and types at \textit{compile time} helps Rust developers create libraries
+that match or even out-perform some of the fastest libraries in C/C++. Take for instance Rust's flagship serialization
+library serde, which generally runs as fast if not faster than C++'s RapidJSON library.\footnote{The serde-rs team
+continually documents performance of serde against simdjson and RapidJSON here: https://github.com/serde-rs/json-benchmark}
+One of the few libraries that beats all other competition is C++'s simdjson library, which Rust now has a port for that
+is compatible with serde.
+
+Serializable and deserializable types are not created using reflection. Their code is literally written at compile time.
+Instead of having to use vtables and other abstractions that can slow down your program, Rust gives you the option to
+dynamically edit your code without the requirement of dynamic dispatch.
+
+Serde is just one of many libraries that uses this style of metaprogramming to create optimized, generic libraries.
+Zero cost abstractions give way for a new form of programming. The ability to write complex structures and even entire
+libraries based on Rust macros that generate code at compile time completely change how quickly, efficiently, and safely
+Rust developers can write new code.
 
 \subsection{Concurrency}
 Rust's concurrency model provides guaranteed safety due to invariants enforced by the compiler. Exclusivity of mutable
 references, strict aliasing rules on boxed types, and other rules set by the compiler allow guaranteed safety in
-concurrent code at \textit{compile time}. This avoids common errors in concurrent/parallel computing, particular in
-the most advanced form in distributed computing.
+concurrent code at \textit{compile time}. This avoids common errors in concurrent/parallel computing, particularly in
+the most advanced form that is distributed computing.
 
 Rust's concurrency model allows clusters to interact freely with each other with a guarantee to avoid undefined
-behavior such as data races. With this in mind, parallelizing neural networks becomes easier and easier with a language
-smart enough to manage its own concurrency bugs at compile time so you do not have to.
+behavior. Part of optimizing ML in distributed computing involves tweaking the underlying system itself, making this
+feature critical for engineers designing clusters to manage large sets of data. Unfortunately for Rust, the ecosystem
+is still very new in this realm. That being said, it opens the door for engineers to create new systems that are
+guaranteed to be safe and secure out of the box. With further development, Rust can become a titan in distributed
+computing thanks to its concurrency model. With a strong foundation on a performant and secure system, models can be
+trained on enormous data sets managed by clusters operating at the highest level of efficiency.
+
+\subsection{Tooling}
+Rust's build tool \textbf{cargo} is one of the most loved features of the language by the community. Out of the box, cargo
+supports building, running, error checking, code formatting, dependency management, an opinionated linter, and much more.
+According to the Stack Overflow Developer Surveys, Rust has placed \#1 for the "most loved programming language" for 7 years
+in a row.~\cite{stackoverflowdevelopersurvey2022} The benefits of Rust's unique \textit{borrow checker} which
+allows the language to be memory safe without a garbage collector is highlighted by the tooling which works around it.
+The error messages generated by the compiler and borrow checker are highlighted and displayed by cargo to provide explicit
+reporting of the issue and even offer potential fixes.
+
+The borrow checker (and in general, memory safety) is one of most loved features of Rust along with cargo.~\cite{rustlovestackoverflow}
+These features, however, apply mostly to developers who work with \textit{safe Rust}, the memory safe version of Rust
+that disallows any and all undefined behavior. What about developers that need to work in an unsafe environment? Rust is
+a systems programming language at heart. If Rust is going to be used to build the foundations of powerful concurrent systems
+so we can train large models on big data, inevitably developers will need to use unsafe code to create them. Therefore,
+there also exists \textit{unsafe Rust} which allows the user to perform unsafe memory operations, such as dereferencing
+raw pointers.
+
+Thankfully, Rust has Miri, an interpreter for Rust's mid-level intermediate representation (MIR). In other words, Miri
+takes compiled Rust code and emulates it in a virtual environment to check for undefined behavior. This tool is critical
+when developing unsafe applications, and helps hold unsafe Rust code to a higher standard than standard C/C++ code.
+
+The benefits of tooling in both safe and unsafe Rust allow developers to create libraries that are as optimized as possible
+without the risk of safety. This is why Rust is so promising for machine learning. We have access to a programming language
+that operates at a low-level. Using unsafe code, we can directly access hardware devices and drivers, develop on graphics
+processing units (GPUs), and use plug-and-play allocators for our every need all while ensuring a higher level of safety
+than we've ever had before.
 
 \end{multicols}
