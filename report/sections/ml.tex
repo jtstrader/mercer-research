@@ -14,7 +14,8 @@ of micro kernels like those used in RCN are column or row vectors that, when mul
 
 To extract these features, store them, and begin training, Rust's nalgebra crate is used.\footnote{Crates are packages
 in Rust. nalgebra is Rust's flagship linear algebra library} nalgebra does not currently come out of the box with image
-convolution, so I implemented the convolver myself.
+convolution, so I implemented the convolver myself. The convolver technically gives the user free will to select their
+own allocator for the matrices they are working with in some edge cases, but this feature was not implemented in this project.
 
 RCN currently supports running in parallel or serially depending on the load on the model. The rayon crate is used to offer quick and
 easy access to parallel training.\footnote{rayon is a data parallelism library}
@@ -24,34 +25,118 @@ sneaky performance hits, further research should be done on where it is most opt
 Currently, the network's backpropagation algorithm is called in parallel, training batches asynchronously and merging the results
 together in the end.
 
-The neural network preserves hyperparameters in the RCN struct, which allows the model to be serialized and deserialized
+The model preserves hyperparameters in the RCN struct, which allows the model to be serialized and deserialized
 easily without needing any reloading. However, this limits the model to having \textit{immutable}
 hyperparameters. Changes in the future will be focused on allowing deserialization of the model into an intermediary struct
 that maintains layer weights and biases that can then be loaded into the RCN struct. The model's serialization and
-deserialization is handled by serde-rs and bincode.\footnote{bincode is a crate that works with serde to generate binary representations of data}
+deserialization is handled by serde-rs and bincode.\footnote{bincode is a crate that works with serde to generate binary
+representations of data}
+
+A basic control diagram is provided below representing the process of input being fed through RCN depending on where
+the iterator is in the convolutional layer config.
+
+\makebox[0pt][l]{%
+\begin{minipage}{0.5\textwidth}
+\centering
+    \includegraphics[width=1\textwidth]{./images/rcn-flow-patched.png}
+ \captionof{figure}{Input Path}
+ \label{fig:fig1}
+\end{minipage}
+}
+
 
 \subsection{Benchmarking}
-The simplest form of RCN, running serially, was pitted against Dr. Nielson's basic Python implementation.
+The simplest form of RCN, running serially, was pitted against Dr. Nielson's basic Python implementation. The only major
+difference in terms of RCN and the Python implementation was the input data, as RCN scaled its data manually while the Python
+interpretation assumed valid data from the beginning.
+
+For the benchmarks, every hyperparameter is kept the same and Rust was set to run in serial mode. The learning rate is
+set to 3.0, there is one hidden layer with 30 neurons, and there are 10000 training images and 8000 testing images.
+See Table~\ref{tab:rcnvpy1} for the results. Rust runs nearly 3x faster!
+
+These tests were run on an AMD Ryzen 5 5600X 12 core CPU. For each epoch, a test ran 10 times to calculate the average
+time of completion.\footnote{Epoch: a complete pass through the training set} This means a total of 80 individual calls
+to each model's respective training methods was made during the test.
 
 \end{multicols}
 
 \begin{table}[!htb]
     \caption{RCN Runtime vs. Python Network Runtime}
+    \label{tab:rcnvpy1}
     \begin{minipage}{\linewidth}
       \centering
         \begin{tabular}{|c|c|c|c|c|}
             \hline
-            Epochs & Python (s) & Rust (s) & Difference (s) & Ratio \\
+            Epochs & Python (s) & Rust (s) & Ratio \\
             \hline\hline
-            1 & 1.6900 & 0.6360 & 1.0540 \\
-            5 & 6.0750 & 1.5180 & 4.5570 \\
-            10 & 11.5040 & 2.7250 & 8.7790 \\
-            20 & 22.3750 & 6.4900 & 15.8850 \\
-            30 & 26.2420 & 7.3660 & 18.8760 \\
-            50 & 56.1250 & 12.3520 & 43.7730 \\
-            75 & 70.0340 & 18.1720 & 51.8620 \\
-            100 & 110.3340 & 23.7180 & 86.6160 \\
+            1 & 0.9700 & 0.3224 & 0.3324 \\
+            5 & 4.7629 & 1.6380 & 0.3439 \\
+            10 & 9.5982 & 3.2726 & 0.3410 \\
+            20 & 18.4448 & 6.4425 & 0.3493 \\
+            30 & 26.1684 & 9.7659 & 0.3732 \\
+            50 & 42.4976 & 15.7880 & 0.3715 \\
+            75 & 66.8354 & 24.3195 & 0.3639 \\
+            100 & 93.5032 & 31.5679 & 0.3376 \\
             \hline
         \end{tabular}
     \end{minipage}
 \end{table}
+
+
+\begin{multicols}{2}
+\subsection{Why Rust vs. Python?}
+The purpose of this experiment comparing Rust to Python was not to prove which was better, but to show that at a level
+of equivalent, idiomatic code, Rust will always be faster due to its nature as a compiled, systems programming language.
+Other languages such as JavaScript/TypeScript, Julia, and R fall into the same traps. Even with optimized just-in-time (JIT)
+compilation, these languages struggle to compete with compiled languages in the most performant of applications. Their
+sacrifice for ease of use is performance and explicitness, something that could be valuable for ML engineers.
+
+In the end, this project could have competed against Julia, R, JavaScript/TypeScript, or even potentially another systems
+programming language like C++. ML engineers are able to use these languages because engineers have gone out of their way
+to write these libraries on the C ABI for these languages to use.\footnote{Julia and R are both written mostly in C,
+while JS/TS runs on Google's V8 engine (C++)} A simple Google search for the "most popular machine learning language" returns
+Python and JavaScript, or occasionally R, at the top. Python was chosen for the many resources online, including
+Dr. Nielson's book on deep learning that was tested against RCN. It is an ideal language for ML, and should not be
+completely taken over by Rust. However, in times when a model is needed either in a performance critical or memory
+critical environment, Rust would be the way to go.
+
+There are plenty of implementations, especially those relying on fully flushed out libraries, in Python that would tear
+a neural network in Rust to pieces. Similarly, there are various algorithms, data structures, and libraries in Rust that
+would do the same to Python. Both of these languages can coexist in the world of ML, but it is necessary to understand
+that Rust can truly become just as computationally strong as Python, if not stronger, if researchers were to dedicate
+time to it.
+
+\subsection{A Case For Rust}
+So if Rust and Python both have their places in the world of ML, where exactly should Rust be used?
+The solution in Python is without question easier to write and understand. However, the Rust solution is more performant
+and easier to maintain thanks to its static typing and the borrow checker. Upgrading or even just managing the Rust code
+is, in the long term, easier. The applications of Rust in machine learning are not just for side projects, but in
+production environments as well. Project managers and senior developers working on Rust projects will be able to easily
+migrate backwards compatible code to more modern Rust editions.
+
+Perhaps these tests do not do Python justice. Does it play into Python's strengths? Does this experiment even play into
+Rust's? Even if Python would be more suited in an environment with heavily optimized, flushed out libraries, Rust is
+not far behind. TensorFlow and ArrayFire GPU bindings have both been introduced in the Rust ecosystem and are growing
+continually to open the doors for GPU programming and deep learning models. Once deep learning and GPU programming are
+more prevalent, reinforcement learning will come next. The limits on Python's ability lie in its interpreter and compiler
+optimizations, but the Rust language doesn't exclusively have those limitations. The only major limit on Rust's growth is time and
+open-source contributions, both of which are growing at a noticeable rate.
+
+\subsection{Future Improvements}
+While understanding this network is relatively simple once you understand Rust, the majority of the time spent on this
+project was developing library functions and tools that did not already exist (like the convolver I had to write). Writing
+all of these separate functions began to get tiresome, and unfortunately nalgebra does not have the best support for common
+functions that can be applied across their matrix types. Hopefully in the future, linear algebra libraries like nalgebra
+will be developed further than they are now.
+
+Plenty of optimizations can be made as well. While Rust does not have a garbage collector, the drop (deallocation) mechanism
+still works in the background as ownership is transferred and references fall out of scope. However, in neural networks
+where the size of neurons is known at compile time, it may be more efficient to use lazily evaluated object pools
+to manage the data used in the backpropagation algorithm. This way, large sets of data being cloned do not also have to
+wait for an allocation but instead can have blocks of memory freed ahead of time. The reuse of expensive allocations
+may improve performance where cloning happens over and over.
+
+Proper choice of library can also boost performance. Rust's ndarray crate is more similar in terms of performance
+and functionality to Python's numpy, and performs faster than nalgebra but without some of the more robust features.
+
+\end{multicols}
