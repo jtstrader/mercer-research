@@ -51,13 +51,8 @@ fn main() -> bincode::Result<()> {
         Some(ref data) => bincode::deserialize(&data[..])?,
         None => RCN::new(
             args.num_classes,
-            vec![
-                RCNLayer::Convolve2D(Padding::Same),
-                RCNLayer::Pool2D(Pooling::Max),
-                RCNLayer::Convolve2D(Padding::Same),
-                RCNLayer::Pool2D(Pooling::Max),
-            ],
-            vec![50],
+            vec![], // no convolutions
+            vec![30],
             &args.training_path,
             &args.testing_path,
             data_fmt,

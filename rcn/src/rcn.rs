@@ -328,6 +328,10 @@ impl<'a> RCN<'a> {
 
     #[inline]
     fn flatten_feature_set(&self, m: &DMatrix<f64>) -> DVector<f64> {
+        if self.convpool_cfg.is_empty() {
+            return DVector::from(m.iter().copied().collect::<Vec<f64>>());
+        }
+
         let mut feature_set: Vec<DMatrix<f64>> = Vec::new();
         for layer in &self.convpool_cfg {
             match layer {
